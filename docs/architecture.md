@@ -6,7 +6,7 @@ This document is the design contract for the project. Components below are docum
 
 Each outreach target is processed by three agents in sequence: Researcher → Writer → Critic. Every agent calls the LLM through the same `llm_call` wrapper (see below) and returns a structured JSON object validated against a Pydantic schema.
 
-### Researcher (Block 2)
+### Researcher (Block 2 — implemented)
 
 - **Input:** target company name, URL, contact name and role, free-text user notes.
 - **Output:**
@@ -22,7 +22,7 @@ Each outreach target is processed by three agents in sequence: Researcher → Wr
   ```
 - **System-prompt focus:** gather and structure. Explicitly forbidden from writing email copy or sales language. Signals must be concrete observations, not generic claims.
 
-### Writer (Block 3)
+### Writer (Block 2 — implemented)
 
 - **Input:** Researcher output + service spec + tone preference (`formal` | `casual` | `direct`).
 - **Output:**
@@ -36,7 +36,7 @@ Each outreach target is processed by three agents in sequence: Researcher → Wr
   ```
 - **System-prompt focus:** pick exactly one hook, write a complete email body, stay 90-150 words. Must reference the chosen signal concretely.
 
-### Critic (Block 3)
+### Critic (Block 2 — implemented)
 
 - **Input:** Writer output + service spec.
 - **Output:**
@@ -55,7 +55,7 @@ Each outreach target is processed by three agents in sequence: Researcher → Wr
   ```
 - **System-prompt focus:** targeted critique on the five named dimensions, then produce an improved version. Not a free-form rewrite.
 
-## Orchestrator (Block 4)
+## Orchestrator (Block 3)
 
 A plain async Python function that, given a target, calls Researcher → Writer → Critic and persists each agent's output as it returns. No LangGraph, no CrewAI, no agent framework.
 
@@ -63,7 +63,7 @@ A plain async Python function that, given a target, calls Researcher → Writer 
 
 Concurrency across targets uses `asyncio.gather` with a small semaphore to cap concurrent LLM calls.
 
-## LLM provider abstraction (Block 2)
+## LLM provider abstraction (Block 2 — implemented)
 
 All agent code calls a single wrapper:
 
@@ -71,15 +71,17 @@ All agent code calls a single wrapper:
 async def llm_call(
     system_prompt: str,
     user_message: str,
-    response_schema: type[BaseModel],
-) -> BaseModel: ...
+    response_schema: dict,
+    model: str = "claude-sonnet-4-6",
+    max_tokens: int = 2000,
+) -> dict: ...
 ```
 
-This wrapper owns: the Anthropic SDK call, JSON-mode response parsing, Pydantic validation, retry on transient errors, and structured logging (input/output/latency/tokens) into the `agent_outputs` table.
+This wrapper owns: the Anthropic SDK call (using forced `tool_choice` for structured output), one retry on a missing `tool_use` block, and append-only JSONL logging at `backend/logs/llm_calls.jsonl` (timestamp, model, prompt hash, message preview, response size, latency, status). Token counts will be added to the log alongside agent_outputs persistence in Block 3.
 
 **Why an abstraction:** centralizes logging in one place, makes provider substitution mechanical, keeps agent files focused on prompts and schemas.
 
-## Persistence (Block 4)
+## Persistence (Block 3)
 
 SQLite via SQLAlchemy. Schema sketch:
 
@@ -90,7 +92,7 @@ SQLite via SQLAlchemy. Schema sketch:
 
 SQLite is sufficient for the single-user, single-machine demo profile. If multi-user/multi-instance ever matters, swap to Postgres — the SQLAlchemy layer makes that a connection-string change plus a migration.
 
-## Frontend pattern (Block 5/6)
+## Frontend pattern (Block 4/5)
 
 - Target intake form on `/`.
 - Run view on `/runs/[id]` with a live activity feed driven by a server-sent-events stream from the backend. Each agent output appended as it arrives.
@@ -106,6 +108,6 @@ The repo ships one fully-developed service config:
 - **Buyer profile:** owner-operators of small service businesses — dental practices, salons, home-services contractors, small clinics. Typically too small for a dedicated receptionist, losing calls after hours and during peak appointments.
 - **Value prop:** AI-powered receptionist that answers calls 24/7, books appointments into the existing scheduling tool, and escalates real emergencies to a human on-call line.
 
-The service config will live at `backend/services/ai_voice_agents.json` (Block 2 or 3). Demo targets — 8 fictional but realistic-feeling small service businesses — will seed at `backend/seed/demo_targets.json` (Block 4).
+The service config lives at `backend/services/ai_voice_agents.json` (Block 2). Demo targets — currently 3 fictional small service businesses, scaling to ~8 in a later block — live at `backend/seed/demo_targets.json` (Block 2).
 
 The engine itself is service-agnostic; the example exists to make the demo concrete instead of abstract.

@@ -4,7 +4,7 @@ A multi-agent personalized B2B outreach engine. The engine itself is generic; th
 
 ## Status
 
-**Block 1 (scaffold).** Both frontend and backend run locally. No agent logic, no LLM calls, no database, no email sending yet. Those come in subsequent blocks.
+**Block 2 (agents).** LLM wrapper and all three agents (Researcher, Writer, Critic) are implemented with smoke tests against a real Anthropic API. No orchestrator wiring them together yet, no database, no API routes beyond `/health`, no frontend, no email sending. Those come in subsequent blocks.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ The orchestrator is a plain hand-rolled async Python function that chains the th
 ## Stack
 
 - **Frontend:** Next.js 14 (App Router), TypeScript (strict), Tailwind CSS v3. shadcn/ui and Recharts added later, only when components are actually needed.
-- **Backend:** Python 3.11+, FastAPI, uvicorn. SQLite + SQLAlchemy wired in Block 4. Anthropic Python SDK wired in Block 2. Resend wired in Block 7.
+- **Backend:** Python 3.11+, FastAPI, uvicorn, Anthropic Python SDK (wired in Block 2). SQLite + SQLAlchemy wired in Block 3. Resend wired in Block 6.
 - **Layout:** Plain monorepo (`frontend/` and `backend/`). No Docker, no Turborepo, no Nx.
 - **Backend env:** `venv` (no Poetry / pipenv).
 
@@ -58,13 +58,11 @@ This project is being built across multiple focused evening sessions, not in a s
 
 The following blocks are planned but **not yet implemented**:
 
-- **Block 2** — LLM provider wrapper + Researcher agent (Anthropic SDK).
-- **Block 3** — Writer agent + Critic agent.
-- **Block 4** — Orchestrator and SQLite persistence (runs, targets, agent_outputs, emails).
-- **Block 5** — FastAPI endpoints + SSE stream for live agent activity.
-- **Block 6** — Frontend UI: target intake, run view with live agent feed, results table.
-- **Block 7** — Resend integration for outbound email (dry-run by default).
-- **Block 8** — Deploy (Vercel for frontend, Fly.io or Render for backend) + polish.
+- **Block 3** — Orchestrator (hand-rolled async chain over Researcher → Writer → Critic) + SQLite persistence (runs, targets, agent_outputs, emails).
+- **Block 4** — FastAPI endpoints + SSE stream for live agent activity.
+- **Block 5** — Frontend UI: target intake, run view with live agent feed, results table.
+- **Block 6** — Resend integration for outbound email (dry-run by default).
+- **Block 7** — Deploy (Vercel for frontend, Fly.io or Render for backend) + polish.
 
 ---
 
