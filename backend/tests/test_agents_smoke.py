@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from agents.critic import run_critic
 from agents.researcher import run_researcher
 from agents.writer import run_writer
 
@@ -120,3 +121,58 @@ async def test_writer_on_demo_001() -> None:
     )
 
     assert len(result["subject"]) <= 80, "Subject line over 80 chars"
+
+
+# Canned Writer draft for demo-001. The body deliberately contains an
+# em-dash so we can confirm the Critic flags it.
+_DRAFT_DEMO_001: dict = {
+    "subject": "Your after-hours emergency line sends patients to voicemail",
+    "body": (
+        "Your website lists an evening and Saturday emergency line — but the fine "
+        "print says you'll call back next business day. For a family in a dental "
+        "emergency at 7pm on a Friday, that's enough reason to call the next practice "
+        "on Google Maps.\n\n"
+        "An AI voice receptionist would answer that call immediately, collect the "
+        "patient's details, book them into your next available slot, and flag a "
+        "genuine emergency to you directly without adding anything to your front "
+        "desk's plate.\n\n"
+        "No voicemail. No lost new patient. No gap in your schedule you didn't know "
+        "you had.\n\n"
+        "Worth a 15-minute call this week to see how it would fit your setup?"
+    ),
+    "chosen_hook": (
+        "A dental emergency that gets a next-business-day callback is a high-friction "
+        "moment for a family-focused brand; patients in urgency are likely to call a "
+        "competitor who answers."
+    ),
+    "reasoning": "Hook 2 is the most visceral; opener cites the practice's own policy.",
+}
+
+
+@pytest.mark.asyncio
+async def test_critic_on_demo_001() -> None:
+    service = _load_service()
+    result = await run_critic(
+        draft=_DRAFT_DEMO_001,
+        service=service,
+        research=_RESEARCH_DEMO_001,
+    )
+
+    print("\n=== Critic output (demo-001) ===")
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+
+    assert "critique" in result
+    assert "final_subject" in result and isinstance(result["final_subject"], str)
+    assert "final_body" in result and isinstance(result["final_body"], str)
+    assert "changes_made" in result
+
+    critique = result["critique"]
+    for key in ("subject_line", "opener", "generic_phrases", "cta_strength", "spam_and_ai_tells"):
+        assert key in critique, f"Missing critique key: {key}"
+
+    for dim in ("subject_line", "opener", "cta_strength"):
+        assert critique[dim]["score"] in {"pass", "weak", "fail"}
+        assert "note" in critique[dim]
+
+    assert isinstance(critique["generic_phrases"], list)
+    assert isinstance(critique["spam_and_ai_tells"], list)
