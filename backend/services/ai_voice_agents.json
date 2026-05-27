@@ -1,0 +1,16 @@
+{
+  "id": "ai-voice-agents",
+  "name": "AI voice agents for small service businesses",
+  "description": "An AI-powered voice receptionist that answers inbound calls 24/7, books appointments directly into the business calendar, escalates real emergencies to staff, and matches the business's brand voice. Targeted at small service businesses (dental practices, salons, home service contractors, small medical clinics) where missed calls translate directly to lost revenue.",
+  "value_prop_summary": "Stop losing leads to missed calls. AI receptionist that books appointments 24/7, in your branding, escalates real emergencies.",
+  "key_pains_addressed": [
+    "Missed calls when staff are busy with in-person customers",
+    "No coverage outside business hours",
+    "Receptionist sick days and turnover",
+    "Long hold times during peak periods",
+    "Calls that could have been simple bookings ending up in voicemail"
+  ],
+  "buyer_profile": "Owner-operator or office manager of a small service business with 2-15 staff. Likely to feel the missed-call pain directly. Comfortable with technology but not a developer. Decision-maker, not someone who needs to escalate purchase decisions.",
+  "tone_default": "direct",
+  "sender_name": "Zygimantas Kazlauskas"
+}

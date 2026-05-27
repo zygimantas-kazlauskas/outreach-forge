@@ -1,0 +1,26 @@
+[
+  {
+    "id": "demo-001",
+    "company_name": "Westshore Family Dental",
+    "url": "westshoredental.example.com",
+    "contact_name": "Dr. Sarah Mitchell",
+    "contact_role": "Practice Owner",
+    "notes": "4-chair family dental practice in a suburban location. Website explicitly states office hours end at 5pm and they don't answer calls after that. Two named dentists on staff page. Lists evening and Saturday emergency line as 'we'll call back next business day'. Small website, family-focused positioning."
+  },
+  {
+    "id": "demo-002",
+    "company_name": "Sunset Cuts Hair Salon",
+    "url": "sunsetcuts.example.com",
+    "contact_name": "Maria Petrov",
+    "contact_role": "Owner",
+    "notes": "Independent hair salon, 6 stylists, walk-ins welcomed but appointments preferred. Website mentions 'we may not pick up if we're with another guest'. Pricing displayed openly. Active on social media. Located in a busy urban shopping street."
+  },
+  {
+    "id": "demo-003",
+    "company_name": "Allister & Sons Plumbing",
+    "url": "allisterplumbing.example.com",
+    "contact_name": "John Allister",
+    "contact_role": "Owner",
+    "notes": "Family-owned residential plumbing. Website advertises 24/7 emergency calls but Google reviews mention slow response times. 3 plumbers on staff. Service radius listed as 30 miles. Strong 4.6 star rating with 80+ reviews."
+  }
+]

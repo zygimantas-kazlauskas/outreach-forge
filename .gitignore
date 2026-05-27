@@ -42,3 +42,6 @@ Thumbs.db
 *.db
 *.sqlite
 *.sqlite3
+
+# LLM call logs (may contain prompt/response excerpts)
+backend/logs/
