@@ -28,3 +28,9 @@ Bumped the Anthropic SDK pin from 0.39.0 to 0.104.1 because 0.39 is incompatible
 Not done in this block: orchestrator, persistence, FastAPI agent routes, SSE, frontend, Resend.
 
 Closing commits: `2a`, `2b`, `2c`, plus a docs commit for this entry + README "What's next" update.
+
+### 2d — prompt tuning + deterministic dash guard (2026-05-29)
+
+Followed up on the two em-dash issues flagged above. First tried prompt-only fixes: strengthened the Writer's ban into a dedicated top-of-list rule plus a final self-check, and rewrote the Critic's dimension 5 into an explicit two-pass (literal character search, then phrase search). Re-ran the Critic against the canned draft that contains a real U+2014. It still missed it — the model narrated a "scan" but checked the wrong sentence and even reintroduced an em-dash in its rewrite, calling it "a stylistic choice." Confirmed programmatically that the draft does contain one em-dash at index 58.
+
+Conclusion: a prompt cannot reliably make the model do a literal character search; that distinction (U+2014 vs U+002D) gets blurred at the token level. Added a deterministic guard (`backend/agents/sanitize.py`) that the Writer and Critic apply to their output copy fields before returning — em/en dashes become commas (or hyphens inside numeric ranges). The prompt edits stay as the belt; the sanitizer is the suspenders. Proven by 8 API-free tests, including wiring tests that mock `llm_call` to return dash-laden copy and assert the agent's returned copy is clean.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from agents.sanitize import strip_banned_dashes
 from llm import llm_call
 
 WRITER_SYSTEM_PROMPT = """You are a specialized email-writing agent in a B2B outreach pipeline. Your job is to write a single personalized cold email to a small service business, grounded in research that has already been done by an upstream agent.
@@ -29,12 +30,13 @@ THE EMAIL MUST:
 - Match the requested tone
 
 THE EMAIL MUST NOT:
+- NEVER use em-dashes (— U+2014) or en-dashes (– U+2013) anywhere in the subject or body. Use commas, periods, colons, or parentheses instead. This rule has no exceptions.
 - Use phrases like "I hope this finds you well", "I wanted to reach out", "I came across", "amazing", "innovative", "leverage", "synergy", "circle back", "touch base", "low-hanging fruit", "value-add", "best-in-class"
 - Promise specific dollar amounts you cannot back up
 - Be longer than 150 words
 - Reference more than one signal/hook (don't try to be comprehensive)
 - Sound like a template
-- Use AI-tells: em-dashes, excessive enthusiasm, three-item lists where one item would do, "I'd love to..."
+- Use AI-tells: excessive enthusiasm, three-item lists where one item would do, "I'd love to..."
 - Ask multiple questions in the CTA - exactly one ask
 
 TONE NOTES:
@@ -43,6 +45,8 @@ TONE NOTES:
 - "direct" = stripped down, fewer adjectives, gets to the point fast, no warm-up
 
 If the candidate hooks are empty or all weak, output a placeholder email body of "Insufficient signal to write a grounded email." and explain in the reasoning field.
+
+FINAL CHECK BEFORE SUBMITTING: scan your subject line and body for the characters — (em-dash) and – (en-dash). If you find any, rewrite the affected sentence to remove them entirely. Submit only after this scan passes.
 
 Output via the structured tool. Do not output prose outside the tool call."""
 
@@ -89,9 +93,13 @@ async def run_writer(
     service: dict[str, Any],
     tone: str = "direct",
 ) -> dict[str, Any]:
-    """Run the Writer agent. Returns parsed tool input."""
-    return await llm_call(
+    """Run the Writer agent. Returns parsed tool input, dash-sanitized."""
+    result = await llm_call(
         system_prompt=WRITER_SYSTEM_PROMPT,
         user_message=_format_writer_input(research, service, tone),
         response_schema=WRITER_TOOL,
     )
+    for field in ("subject", "body"):
+        if isinstance(result.get(field), str):
+            result[field] = strip_banned_dashes(result[field])
+    return result

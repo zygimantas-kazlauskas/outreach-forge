@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from agents.sanitize import strip_banned_dashes
 from llm import llm_call
 
 CRITIC_SYSTEM_PROMPT = """You are a specialized critique agent in a B2B outreach pipeline. Your job is to evaluate a drafted cold email on five specific dimensions, then produce an improved version that addresses any issues you flag.
@@ -24,7 +25,21 @@ You critique on EXACTLY these five dimensions, in this order:
 
 4. CTA STRENGTH - Is the call to action concrete (specific time, specific format)? Is it low-friction (under 15 minutes, no commitment)? Is it singular (one ask, not three)? Score: pass / weak / fail with one-line explanation.
 
-5. SPAM AND AI-TELL TRIGGERS - Flag any of: em-dashes, "I hope this finds you well", "leverage/synergy/circle back/touch base", excessive exclamation marks, ALL CAPS words, sentences starting with "I", "absolutely/literally/genuinely", "amazing/innovative/groundbreaking". Empty list if nothing flagged.
+5. SPAM AND AI-TELL TRIGGERS — Perform two passes:
+
+PASS A — LITERAL CHARACTER SEARCH. Scan the subject and body for these specific characters. Flag EVERY instance, no exceptions, no judgment calls:
+- em-dash (— U+2014)
+- en-dash (– U+2013)
+
+PASS B — PHRASE PATTERN SEARCH. Scan for these phrases (case-insensitive):
+- 'I hope this finds you well' / 'I hope this email finds you well'
+- 'leverage' / 'synergy' / 'circle back' / 'touch base' / 'low-hanging fruit' / 'value-add' / 'best-in-class'
+- 'absolutely' / 'literally' / 'genuinely'
+- 'amazing' / 'innovative' / 'groundbreaking'
+- Excessive exclamation marks (more than one in the entire body)
+- ALL CAPS words longer than 2 letters
+
+Return a single list combining both passes. Empty list only if BOTH passes find nothing. List each flagged item with which pass caught it (e.g., 'em-dash at position 47 (Pass A)' or 'leverage (Pass B)').
 
 After the critique, produce a FINAL VERSION that fixes any issues. If everything passed, the final version is identical to the input. If anything was weak or failed, rewrite affected sections cleanly.
 
@@ -120,9 +135,13 @@ async def run_critic(
     service: dict[str, Any],
     research: dict[str, Any],
 ) -> dict[str, Any]:
-    """Run the Critic agent over a draft. Returns parsed tool input."""
-    return await llm_call(
+    """Run the Critic agent over a draft. Returns parsed tool input, dash-sanitized."""
+    result = await llm_call(
         system_prompt=CRITIC_SYSTEM_PROMPT,
         user_message=_format_critic_input(draft, service, research),
         response_schema=CRITIC_TOOL,
     )
+    for field in ("final_subject", "final_body"):
+        if isinstance(result.get(field), str):
+            result[field] = strip_banned_dashes(result[field])
+    return result

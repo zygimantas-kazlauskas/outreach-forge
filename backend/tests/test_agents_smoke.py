@@ -16,6 +16,7 @@ import pytest
 
 from agents.critic import run_critic
 from agents.researcher import run_researcher
+from agents.sanitize import has_banned_dashes
 from agents.writer import run_writer
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -121,6 +122,8 @@ async def test_writer_on_demo_001() -> None:
     )
 
     assert len(result["subject"]) <= 80, "Subject line over 80 chars"
+    assert not has_banned_dashes(result["subject"]), "Subject contains an em/en dash"
+    assert not has_banned_dashes(result["body"]), "Body contains an em/en dash"
 
 
 # Canned Writer draft for demo-001. The body deliberately contains an
@@ -176,3 +179,8 @@ async def test_critic_on_demo_001() -> None:
 
     assert isinstance(critique["generic_phrases"], list)
     assert isinstance(critique["spam_and_ai_tells"], list)
+
+    # Deterministic guarantee: the returned copy is dash-free regardless of
+    # whether the model's own spam_and_ai_tells scan caught the input em-dash.
+    assert not has_banned_dashes(result["final_subject"]), "final_subject contains an em/en dash"
+    assert not has_banned_dashes(result["final_body"]), "final_body contains an em/en dash"
