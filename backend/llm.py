@@ -76,6 +76,17 @@ async def llm_call(
     tool_name = response_schema["name"]
     sys_hash = hashlib.sha256(system_prompt.encode("utf-8")).hexdigest()[:16]
     msg_preview = user_message[:100]
+    log_full = os.environ.get("LLM_LOG_FULL") == "1"
+
+    def _emit(entry: dict[str, Any], *, response: dict[str, Any] | None = None) -> None:
+        # When LLM_LOG_FULL=1, attach the full prompts (and parsed response, if
+        # any) to the log line. Default behaviour leaves the entry untouched.
+        if log_full:
+            entry["system_prompt"] = system_prompt
+            entry["user_message"] = user_message
+            if response is not None:
+                entry["response"] = response
+        _log(entry)
 
     messages: list[dict[str, Any]] = [{"role": "user", "content": user_message}]
     last_error: str | None = None
@@ -94,7 +105,7 @@ async def llm_call(
         except Exception as e:
             latency_ms = int((time.perf_counter() - start) * 1000)
             err = f"{type(e).__name__}: {e}"
-            _log({
+            _emit({
                 "model": model,
                 "system_prompt_hash": sys_hash,
                 "user_message_first_100_chars": msg_preview,
@@ -114,7 +125,7 @@ async def llm_call(
 
         if tool_use is not None:
             result = dict(tool_use.input) if not isinstance(tool_use.input, dict) else tool_use.input
-            _log({
+            _emit({
                 "model": model,
                 "system_prompt_hash": sys_hash,
                 "user_message_first_100_chars": msg_preview,
@@ -122,11 +133,11 @@ async def llm_call(
                 "latency_ms": latency_ms,
                 "status": "success",
                 "attempt": attempt,
-            })
+            }, response=result)
             return result
 
         last_error = f"Model did not call tool {tool_name!r}"
-        _log({
+        _emit({
             "model": model,
             "system_prompt_hash": sys_hash,
             "user_message_first_100_chars": msg_preview,

@@ -25,13 +25,7 @@ You critique on EXACTLY these five dimensions, in this order:
 
 4. CTA STRENGTH - Is the call to action concrete (specific time, specific format)? Is it low-friction (under 15 minutes, no commitment)? Is it singular (one ask, not three)? Score: pass / weak / fail with one-line explanation.
 
-5. SPAM AND AI-TELL TRIGGERS — Perform two passes:
-
-PASS A — LITERAL CHARACTER SEARCH. Scan the subject and body for these specific characters. Flag EVERY instance, no exceptions, no judgment calls:
-- em-dash (— U+2014)
-- en-dash (– U+2013)
-
-PASS B — PHRASE PATTERN SEARCH. Scan for these phrases (case-insensitive):
+5. SPAM AND AI-TELL TRIGGERS - Flag spam-filter triggers and AI-writing tells actually present in the subject or body. Look for (case-insensitive):
 - 'I hope this finds you well' / 'I hope this email finds you well'
 - 'leverage' / 'synergy' / 'circle back' / 'touch base' / 'low-hanging fruit' / 'value-add' / 'best-in-class'
 - 'absolutely' / 'literally' / 'genuinely'
@@ -39,7 +33,9 @@ PASS B — PHRASE PATTERN SEARCH. Scan for these phrases (case-insensitive):
 - Excessive exclamation marks (more than one in the entire body)
 - ALL CAPS words longer than 2 letters
 
-Return a single list combining both passes. Empty list only if BOTH passes find nothing. List each flagged item with which pass caught it (e.g., 'em-dash at position 47 (Pass A)' or 'leverage (Pass B)').
+Do NOT scan for em-dashes or en-dashes: a deterministic post-processing step already strips every dash from the returned copy, so reporting them here is pointless and forbidden.
+
+For each tell you find, return a single entry that quotes the exact offending text (e.g., 'leverage' or 'this is AMAZING'). Return ONLY tells that are genuinely present. If you find none, return an EMPTY array. Do not narrate your search, do not describe passes or re-checks, do not write "none found" or any other commentary into the list - an empty array is the only correct way to say nothing was found.
 
 After the critique, produce a FINAL VERSION that fixes any issues. If everything passed, the final version is identical to the input. If anything was weak or failed, rewrite affected sections cleanly.
 
@@ -91,7 +87,7 @@ CRITIC_TOOL: dict[str, Any] = {
                     "spam_and_ai_tells": {
                         "type": "array",
                         "items": {"type": "string"},
-                        "description": "Triggers found. Empty if none.",
+                        "description": "Concrete spam/AI-tell triggers actually present, each quoting the offending text. Empty array if none. No process narration, no 'none found' text, no dash reports.",
                     },
                 },
                 "required": [
