@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -21,6 +22,13 @@ from db import Email, Run, SessionLocal, Target
 from events import TERMINAL_EVENT, bus
 
 app = FastAPI(title="Outreach Forge API", version="0.4.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 SERVICES_DIR = Path(__file__).resolve().parent / "services"
 SSE_KEEPALIVE_SECONDS = 15
