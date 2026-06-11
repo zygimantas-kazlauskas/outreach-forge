@@ -8,6 +8,7 @@ import { ApiError, getRun } from "@/lib/api";
 import { boardCounts } from "@/lib/runBoard";
 import { useRunEvents } from "@/lib/useRunEvents";
 import type { RunSnapshot, RunStatus } from "@/lib/types";
+import { EmailsGrid } from "@/components/EmailsGrid";
 import { RunBoard } from "@/components/RunBoard";
 import { ErrorBanner, Spinner } from "@/components/ui";
 
@@ -107,6 +108,13 @@ export default function RunPage() {
         <h2 className="text-sm font-medium">Pipeline</h2>
         <RunBoard board={board} />
       </section>
+
+      {(status === "completed" || status === "failed") && runId !== null && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium">Final drafts</h2>
+          <EmailsGrid runId={runId} />
+        </section>
+      )}
 
       <footer>
         <Link href="/" className="text-sm text-neutral-500 underline">
