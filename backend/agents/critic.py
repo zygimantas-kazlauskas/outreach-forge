@@ -25,7 +25,7 @@ You critique on EXACTLY these five dimensions, in this order:
 
 4. CTA STRENGTH - Is the call to action concrete (specific time, specific format)? Is it low-friction (under 15 minutes, no commitment)? Is it singular (one ask, not three)? Score: pass / weak / fail with one-line explanation.
 
-5. SPAM AND AI-TELL TRIGGERS - Flag spam-filter triggers and AI-writing tells actually present in the subject or body. Look for (case-insensitive):
+5. SPAM AND AI-TELL TRIGGERS - Scan ONLY the drafted subject and body. The service spec and researcher output are context for grounding checks, NOT scan targets: a word or phrase that appears only in the research or spec is NOT a finding, no matter how clearly it matches the list below. Flag spam-filter triggers and AI-writing tells actually present in the subject or body. Look for (case-insensitive):
 - 'I hope this finds you well' / 'I hope this email finds you well'
 - 'leverage' / 'synergy' / 'circle back' / 'touch base' / 'low-hanging fruit' / 'value-add' / 'best-in-class'
 - 'absolutely' / 'literally' / 'genuinely'

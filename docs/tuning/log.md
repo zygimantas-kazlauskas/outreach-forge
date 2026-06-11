@@ -49,3 +49,27 @@ Bonus: the rule also catches WRITER-introduced unverifiable claims, partially
 covering baseline finding 4. No fabrications in any rewrite; no regressions.
 The critic's CTA threshold behavior was also consistent this run, weakening
 the case for candidate iteration 4. KEPT.
+
+## Iteration 3 — critic spam-scan scope (iter3_critic_scan_scope.md) — $0.50, KEEP
+
+Hypothesis: the baseline false positive ("literally" flagged from the
+researcher's hook text) happened because dimension 5 has no scan boundary;
+restricting it to the drafted subject + body eliminates context bleed.
+
+Result: spam_and_ai_tells empty 3/3 with no context bleed; emails clean.
+No regressions (openers on formula, pivots varied, lengths 116/125/148). KEPT.
+
+## Stop: plateau — $2.00 of $3.00 spent (4 runs)
+
+All three approved findings fixed and verified. Improved vs baseline:
+batch-level template convergence broken at the pivot paragraph and CTA
+(opener formula untouched per spec), critic rewrites can no longer introduce
+ungrounded claims (rule observed firing on a real case), spam-tell field no
+longer pollutable by research context. Reverts: none — all three iterations
+kept on first try.
+
+Not improved / known residuals: critic applies the 15-minute CTA friction
+threshold inconsistently (mild; candidate for a future pass), subject lines
+still favor a "Name: detail" colon pattern (finding 5, deliberately skipped),
+writer cost-coverage claims only partially mitigated via the critic's
+no-new-facts rule (finding 4, deliberately skipped).
