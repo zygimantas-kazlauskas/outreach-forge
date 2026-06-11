@@ -4,7 +4,7 @@ A multi-agent personalized B2B outreach engine. The engine itself is generic; th
 
 ## Status
 
-**Block 3 complete — full pipeline operational (orchestrator + SQLite persistence + e2e tested).** A hand-rolled async orchestrator runs targets concurrently (semaphore-bounded), each through the sequential Researcher → Writer → Critic chain, persisting every agent output and the final draft email to SQLite with per-target error isolation. Verified end-to-end against the real API on all three demo targets: one run, nine agent outputs, three grounded draft emails. No API routes beyond `/health` yet, no frontend, no email sending — those come in subsequent blocks.
+**Block 4 complete — REST API + live SSE on top of the pipeline.** `POST /runs` kicks off a batch as a background task and returns the run id immediately; `GET /runs/{id}/events` streams live agent activity over SSE (with history replay for late subscribers); `GET /runs/{id}` and `GET /runs/{id}/emails` expose status and final drafts. The orchestrator (Block 3) runs targets concurrently through the Researcher → Writer → Critic chain with SQLite persistence and per-target error isolation, verified end-to-end against the real API. Prompts have been through a measured tuning pass (see `docs/tuning/`). No frontend yet, no email sending (`POST /emails/{id}/send` returns 501 until Resend lands in Block 6).
 
 ## Architecture
 
@@ -58,7 +58,6 @@ This project is being built across multiple focused evening sessions, not in a s
 
 The following blocks are planned but **not yet implemented**:
 
-- **Block 4** — FastAPI endpoints + SSE stream for live agent activity.
 - **Block 5** — Frontend UI: target intake, run view with live agent feed, results table.
 - **Block 6** — Resend integration for outbound email (dry-run by default).
 - **Block 7** — Deploy (Vercel for frontend, Fly.io or Render for backend) + polish.

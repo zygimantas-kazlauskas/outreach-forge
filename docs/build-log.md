@@ -46,3 +46,30 @@ Two evenings. Block 3 complete — full pipeline operational (orchestrator + SQL
 - **Close-out.** Extended the dash guard to `chosen_hook` (in the Writer and at the orchestrator's persistence path — no dash reaches the `emails` table in any column), gated the Block 2 smoke tests behind `RUN_SMOKE=1` after a bare `pytest tests/` accidentally spent ~$0.15 hitting the API, and updated docs. A flagless `pytest tests/` now runs 11 free tests and skips all 4 paid ones in ~1.3s.
 
 Not done in this block: FastAPI agent routes, SSE, frontend, Resend.
+
+## Prompt tuning + Block 4 — API + SSE (2026-06-11, second sitting)
+
+Same evening as the Block 3 close-out, after publishing the repo to GitHub.
+
+**Prompt-tuning pass ($2.00 of a $3.00 budget, 4 runs, log in docs/tuning/log.md).**
+Baseline run surfaced three high-leverage weaknesses; one measured iteration
+each, all kept on first try: (1) writer template convergence broken at the
+product-pivot paragraph and CTA while explicitly preserving the working
+opener formula (their own words → consequence); (2) critic banned from
+introducing ungrounded factual claims in rewrites — observed firing on a
+real case ("Setup takes a few days," cut with the rule quoted back);
+(3) critic's spam/AI-tell scan scoped to the drafted subject and body so
+research context can't bleed into findings. Stopped on plateau.
+
+**Block 4.** In-process event bus (`backend/events.py`) with per-run history
+replay; orchestrator split into `create_run` / `execute_run` (with
+`run_batch` kept as the composition) and instrumented to publish per-target
+agent start/finish, target completed/failed, and run lifecycle events.
+FastAPI surface: `POST /runs` (202, background task, returns run_id
+immediately), `GET /runs/{id}` (status + counts), `GET /runs/{id}/events`
+(SSE: replay, then live, closes on run_completed, keepalives), `GET
+/runs/{id}/emails`, and `POST /emails/{id}/send` returning 501 until Resend
+in Block 6. All proven free: 11 wiring tests (5 orchestrator/events + 6 API
+over httpx ASGI transport) with mocked agents on throwaway DBs.
+
+Not done in this block: frontend, Resend, deploy.
