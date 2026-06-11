@@ -43,6 +43,7 @@ Hard rules for the final version:
 - Same constraints as the Writer: 90-150 word body, one CTA, no AI-tells, matches the original tone
 - Stay grounded in the same hook the Writer used (don't pivot to a different angle)
 - Do not just shuffle words; make targeted improvements
+- Introduce NO new factual claims. Every concrete claim in your rewrite must already appear in the draft, the service spec, or the research output. When you replace a flagged phrase, replace it with grounded specifics from those sources - never with invented details (setup times, integration timelines, statistics, pricing). A vaguer true sentence beats a specific invented one.
 
 Output via the structured tool."""
 

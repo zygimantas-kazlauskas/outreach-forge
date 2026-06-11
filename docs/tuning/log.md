@@ -35,3 +35,17 @@ New finding: convergence pressure moved to the CRITIC — it scored all 3 CTAs
 minutes Thursday or Friday work..."), and applied the 15-minute friction
 threshold inconsistently (cut one 20-minute ask, kept another). Candidate
 iteration 4.
+
+## Iteration 2 — critic no-new-facts rule (iter2_critic_no_new_facts.md) — $0.50, KEEP
+
+Hypothesis: the critic fabricates because nothing forbids it; an explicit
+grounding constraint on rewrites stops invented specifics without dulling
+its edits.
+
+Result: rule fired exactly as designed — the writer drafted "Setup takes a
+few days" (ungrounded) and the critic cut it, citing the rule: "an
+unverifiable specific not found in the service spec or research output."
+Bonus: the rule also catches WRITER-introduced unverifiable claims, partially
+covering baseline finding 4. No fabrications in any rewrite; no regressions.
+The critic's CTA threshold behavior was also consistent this run, weakening
+the case for candidate iteration 4. KEPT.
