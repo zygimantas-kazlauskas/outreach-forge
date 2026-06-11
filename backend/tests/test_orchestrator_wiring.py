@@ -13,6 +13,7 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
+import events
 import orchestrator
 from db import AgentOutput, Base, Email, Run, Target
 
@@ -56,6 +57,9 @@ def session_factory(tmp_path, monkeypatch):
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     monkeypatch.setattr(orchestrator, "SessionLocal", factory)
     monkeypatch.setattr(orchestrator, "init_db", lambda: None)
+    # Throwaway DBs restart run ids at 1, so clear the global bus between
+    # tests to keep event histories from colliding.
+    events.bus.reset()
     return factory
 
 
@@ -142,6 +146,64 @@ async def test_one_target_failing_does_not_kill_batch(session_factory, monkeypat
         emails = s.scalars(select(Email).where(Email.run_id == run_id)).all()
         assert len(emails) == 1
         assert emails[0].target_id == by_name["Alpha Dental"].id
+
+
+@pytest.mark.asyncio
+async def test_event_stream_records_full_sequence(session_factory, monkeypatch):
+    _patch_agents(monkeypatch)
+    service = orchestrator.load_service_spec()
+
+    run_id = await orchestrator.run_batch(TARGETS, service, concurrency=2)
+
+    history, queue = events.bus.subscribe(run_id)
+    events.bus.unsubscribe(run_id, queue)
+    types = [e["type"] for e in history]
+
+    assert types[0] == "run_started"
+    assert history[0]["target_count"] == 2
+    assert types[-1] == "run_completed"
+    assert history[-1]["status"] == "completed"
+    assert types.count("target_completed") == 2
+    assert all("ts" in e and e["run_id"] == run_id for e in history)
+
+    # per target: agents start and finish in pipeline order
+    target_ids = {e["target_id"] for e in history if "target_id" in e}
+    assert len(target_ids) == 2
+    for tid in target_ids:
+        agent_seq = [
+            (e["type"], e["agent"])
+            for e in history
+            if e.get("target_id") == tid and "agent" in e
+        ]
+        assert agent_seq == [
+            ("agent_started", "researcher"),
+            ("agent_finished", "researcher"),
+            ("agent_started", "writer"),
+            ("agent_finished", "writer"),
+            ("agent_started", "critic"),
+            ("agent_finished", "critic"),
+        ]
+
+
+@pytest.mark.asyncio
+async def test_event_stream_reports_target_failure(session_factory, monkeypatch):
+    _patch_agents(monkeypatch, writer_fails_for="Beta Salon")
+    service = orchestrator.load_service_spec()
+
+    run_id = await orchestrator.run_batch(TARGETS, service, concurrency=2)
+
+    history, queue = events.bus.subscribe(run_id)
+    events.bus.unsubscribe(run_id, queue)
+
+    failures = [e for e in history if e["type"] == "target_failed"]
+    assert len(failures) == 1
+    assert failures[0]["target_name"] == "Beta Salon"
+    assert "writer exploded" in failures[0]["error"]
+    assert history[-1] == {
+        **history[-1],
+        "type": "run_completed",
+        "status": "completed",
+    }
 
 
 @pytest.mark.asyncio

@@ -29,6 +29,7 @@ from agents.researcher import run_researcher
 from agents.sanitize import strip_banned_dashes
 from agents.writer import run_writer
 from db import AgentOutput, Email, Run, SessionLocal, Target, init_db
+from events import bus
 from llm import DEFAULT_MODEL
 
 SERVICE_SPEC_PATH = Path(__file__).resolve().parent / "services" / "ai_voice_agents.json"
@@ -160,26 +161,42 @@ async def run_pipeline_for_target(
     on the run's notes.
     """
     try:
-        try:
-            target_input = json.loads(raw_notes)
-            if not isinstance(target_input, dict):
-                raise ValueError("raw_notes JSON is not an object")
-        except (json.JSONDecodeError, ValueError):
-            # Plain-text notes (e.g. rows created outside run_batch).
-            target_input = {"notes": raw_notes}
+        target_input = json.loads(raw_notes)
+        if not isinstance(target_input, dict):
+            raise ValueError("raw_notes JSON is not an object")
+    except (json.JSONDecodeError, ValueError):
+        # Plain-text notes (e.g. rows created outside run_batch).
+        target_input = {"notes": raw_notes}
+    target_name = target_input.get("company_name", "unknown")
 
+    def _agent_event(event_type: str, agent: str, **extra: Any) -> None:
+        bus.publish(run_id, {
+            "type": event_type,
+            "target_id": target_row_id,
+            "target_name": target_name,
+            "agent": agent,
+            **extra,
+        })
+
+    try:
+        _agent_event("agent_started", "researcher")
         research, latency_ms = await _timed(run_researcher(target_input))
+        _agent_event("agent_finished", "researcher", latency_ms=latency_ms)
         await asyncio.to_thread(
             _save_agent_output, run_id, target_row_id, "researcher", research, latency_ms
         )
 
         tone = service_spec.get("tone_default", "direct")
+        _agent_event("agent_started", "writer")
         draft, latency_ms = await _timed(run_writer(research, service_spec, tone))
+        _agent_event("agent_finished", "writer", latency_ms=latency_ms)
         await asyncio.to_thread(
             _save_agent_output, run_id, target_row_id, "writer", draft, latency_ms
         )
 
+        _agent_event("agent_started", "critic")
         critique, latency_ms = await _timed(run_critic(draft, service_spec, research))
+        _agent_event("agent_finished", "critic", latency_ms=latency_ms)
         await asyncio.to_thread(
             _save_agent_output, run_id, target_row_id, "critic", critique, latency_ms
         )
@@ -187,28 +204,49 @@ async def run_pipeline_for_target(
         await asyncio.to_thread(
             _save_email_and_complete, run_id, target_row_id, critique, draft
         )
+        bus.publish(run_id, {
+            "type": "target_completed",
+            "target_id": target_row_id,
+            "target_name": target_name,
+        })
     except Exception as e:
         logger.exception("Pipeline failed for target row %s", target_row_id)
         error = f"{type(e).__name__}: {e}"
+        bus.publish(run_id, {
+            "type": "target_failed",
+            "target_id": target_row_id,
+            "target_name": target_name,
+            "error": error,
+        })
         try:
             await asyncio.to_thread(_record_target_failure, run_id, target_row_id, error)
         except Exception:
             logger.exception("Could not record failure for target row %s", target_row_id)
 
 
-async def run_batch(
-    targets: list[dict[str, Any]],
+async def create_run(
+    targets: list[dict[str, Any]], service_spec: dict[str, Any]
+) -> tuple[int, list[tuple[int, str]]]:
+    """Persist the run + target rows and return (run_id, rows) without
+    executing anything. Lets the API return the run id immediately and run
+    execute_run as a background task."""
+    await asyncio.to_thread(init_db)
+    return await asyncio.to_thread(_create_run_and_targets, targets, service_spec)
+
+
+async def execute_run(
+    run_id: int,
+    rows: list[tuple[int, str]],
     service_spec: dict[str, Any],
     concurrency: int = 3,
-) -> int:
-    """Run every target through the pipeline concurrently. Returns the run id.
+) -> str:
+    """Run every target of an already-created run concurrently. Returns the
+    final run status.
 
     Run status ends 'completed' unless EVERY target failed (partial success
     still counts as 'completed'; per-target statuses carry the detail).
     """
-    await asyncio.to_thread(init_db)
-    run_id, rows = await asyncio.to_thread(_create_run_and_targets, targets, service_spec)
-
+    bus.publish(run_id, {"type": "run_started", "target_count": len(rows)})
     semaphore = asyncio.Semaphore(concurrency)
 
     async def _bounded(target_row_id: int, raw_notes: str) -> None:
@@ -216,5 +254,17 @@ async def run_batch(
             await run_pipeline_for_target(run_id, target_row_id, raw_notes, service_spec)
 
     await asyncio.gather(*(_bounded(row_id, notes) for row_id, notes in rows))
-    await asyncio.to_thread(_finalize_run, run_id)
+    status = await asyncio.to_thread(_finalize_run, run_id)
+    bus.publish(run_id, {"type": "run_completed", "status": status})
+    return status
+
+
+async def run_batch(
+    targets: list[dict[str, Any]],
+    service_spec: dict[str, Any],
+    concurrency: int = 3,
+) -> int:
+    """Create a run and execute it to completion. Returns the run id."""
+    run_id, rows = await create_run(targets, service_spec)
+    await execute_run(run_id, rows, service_spec, concurrency)
     return run_id
