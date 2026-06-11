@@ -17,6 +17,8 @@ from collections import deque
 from datetime import datetime, timezone
 from typing import Any
 
+# Known limitation: history is capped per run but never evicted across runs,
+# so memory grows with run count; eviction/archival is deferred to Block 7.
 HISTORY_LIMIT = 1000  # per run; a 3-target run emits ~25 events
 
 TERMINAL_EVENT = "run_completed"
