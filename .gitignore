@@ -49,3 +49,10 @@ backend/outreach_forge.db
 
 # LLM call logs (may contain prompt/response excerpts)
 backend/logs/
+
+# Private service configs (real client/prospect data) — only the public
+# ai_voice_agents example ships with the repo
+backend/services/private_*.json
+
+# Local Claude Code settings
+.claude/settings.local.json
