@@ -16,7 +16,7 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Outreach Forge",
   description:
-    "Multi-agent personalized B2B outreach engine. Currently in scaffold phase.",
+    "Multi-agent personalized B2B outreach engine: compose runs, watch the agent pipeline live, review final drafts.",
 };
 
 export default function RootLayout({
