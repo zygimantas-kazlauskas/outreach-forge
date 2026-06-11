@@ -8,6 +8,14 @@ check_same_thread=False.
 
 The .db file lives at backend/outreach_forge.db and is gitignored. Run this
 module directly (python db.py) to create the file and all tables.
+
+CONCURRENCY CONTRACT (read before writing async DB code):
+- One SessionLocal session per target task. Never share a Session across
+  asyncio tasks; each task opens its own.
+- All DB calls from async code run inside asyncio.to_thread, because this
+  engine is sync. Never call a Session method directly on the event loop.
+- Sessions are short-lived: open, write, commit, close per persistence point.
+  Do not hold a Session open across an await.
 """
 
 from __future__ import annotations
@@ -26,7 +34,7 @@ from sqlalchemy.orm import (
     sessionmaker,
 )
 
-DB_PATH = Path(__file__).parent / "outreach_forge.db"
+DB_PATH = Path(__file__).resolve().parent / "outreach_forge.db"
 ENGINE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(ENGINE_URL, connect_args={"check_same_thread": False})
