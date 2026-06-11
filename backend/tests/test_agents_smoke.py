@@ -1,7 +1,9 @@
 """Smoke tests for the three agents.
 
-These hit the real Anthropic API. Run only when ANTHROPIC_API_KEY is set
-and you're OK spending a small amount of credit.
+These hit the real Anthropic API. Gated behind RUN_SMOKE=1 so a bare
+`pytest tests/` never spends money. Run deliberately with:
+
+    RUN_SMOKE=1 .venv/Scripts/python.exe -m pytest tests/test_agents_smoke.py -s
 
 Pass criteria is structural — agents return valid structured output that
 matches their schema. Quality is judged by inspection of printed output.
@@ -10,9 +12,15 @@ matches their schema. Quality is judged by inspection of printed output.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get("RUN_SMOKE") != "1",
+    reason="paid smoke tests; set RUN_SMOKE=1 to run deliberately",
+)
 
 from agents.critic import run_critic
 from agents.researcher import run_researcher

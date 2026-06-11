@@ -4,7 +4,7 @@ A multi-agent personalized B2B outreach engine. The engine itself is generic; th
 
 ## Status
 
-**Block 2 (agents).** LLM wrapper and all three agents (Researcher, Writer, Critic) are implemented with smoke tests against a real Anthropic API. No orchestrator wiring them together yet, no database, no API routes beyond `/health`, no frontend, no email sending. Those come in subsequent blocks.
+**Block 3 complete — full pipeline operational (orchestrator + SQLite persistence + e2e tested).** A hand-rolled async orchestrator runs targets concurrently (semaphore-bounded), each through the sequential Researcher → Writer → Critic chain, persisting every agent output and the final draft email to SQLite with per-target error isolation. Verified end-to-end against the real API on all three demo targets: one run, nine agent outputs, three grounded draft emails. No API routes beyond `/health` yet, no frontend, no email sending — those come in subsequent blocks.
 
 ## Architecture
 
@@ -58,7 +58,6 @@ This project is being built across multiple focused evening sessions, not in a s
 
 The following blocks are planned but **not yet implemented**:
 
-- **Block 3** — Orchestrator (hand-rolled async chain over Researcher → Writer → Critic) + SQLite persistence (runs, targets, agent_outputs, emails).
 - **Block 4** — FastAPI endpoints + SSE stream for live agent activity.
 - **Block 5** — Frontend UI: target intake, run view with live agent feed, results table.
 - **Block 6** — Resend integration for outbound email (dry-run by default).

@@ -49,7 +49,7 @@ async def test_writer_strips_dashes_from_output(monkeypatch) -> None:
         return {
             "subject": f"Your line {EM_DASH} voicemail",
             "body": f"Body text {EM_DASH} with a dash. Open 9{EN_DASH}5.",
-            "chosen_hook": "hook",
+            "chosen_hook": f"capacity gap {EM_DASH} already visible in reviews",
             "reasoning": "reason",
         }
 
@@ -58,8 +58,10 @@ async def test_writer_strips_dashes_from_output(monkeypatch) -> None:
 
     assert not has_banned_dashes(out["subject"])
     assert not has_banned_dashes(out["body"])
+    assert not has_banned_dashes(out["chosen_hook"])
     assert out["subject"] == "Your line, voicemail"
     assert out["body"] == "Body text, with a dash. Open 9-5."
+    assert out["chosen_hook"] == "capacity gap, already visible in reviews"
 
 
 @pytest.mark.asyncio

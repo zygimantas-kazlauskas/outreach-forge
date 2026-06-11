@@ -99,7 +99,7 @@ async def run_writer(
         user_message=_format_writer_input(research, service, tone),
         response_schema=WRITER_TOOL,
     )
-    for field in ("subject", "body"):
+    for field in ("subject", "body", "chosen_hook"):
         if isinstance(result.get(field), str):
             result[field] = strip_banned_dashes(result[field])
     return result

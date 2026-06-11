@@ -26,6 +26,7 @@ from typing import Any, Awaitable
 
 from agents.critic import run_critic
 from agents.researcher import run_researcher
+from agents.sanitize import strip_banned_dashes
 from agents.writer import run_writer
 from db import AgentOutput, Email, Run, SessionLocal, Target, init_db
 from llm import DEFAULT_MODEL
@@ -95,6 +96,9 @@ def _save_agent_output(
 def _save_email_and_complete(
     run_id: int, target_id: int, critique: dict[str, Any], draft: dict[str, Any]
 ) -> None:
+    chosen_hook = draft.get("chosen_hook")
+    if isinstance(chosen_hook, str):
+        chosen_hook = strip_banned_dashes(chosen_hook)
     with SessionLocal() as session:
         session.add(
             Email(
@@ -102,7 +106,7 @@ def _save_email_and_complete(
                 target_id=target_id,
                 subject=critique["final_subject"],
                 body=critique["final_body"],
-                chosen_hook=draft.get("chosen_hook"),
+                chosen_hook=chosen_hook,
                 source="critic",
                 send_status="draft",
             )

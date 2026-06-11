@@ -17,10 +17,13 @@ import orchestrator
 from db import AgentOutput, Base, Email, Run, Target
 
 FAKE_RESEARCH = {"summary": "s", "signals": [], "candidate_hooks": []}
+# chosen_hook deliberately contains an em-dash: the agents are mocked here,
+# so the clean value asserted below proves the ORCHESTRATOR's persistence
+# guard, independent of the writer's own sanitization.
 FAKE_DRAFT = {
     "subject": "Fake subject",
     "body": "Fake body",
-    "chosen_hook": "fake hook",
+    "chosen_hook": "fake — hook",
     "reasoning": "r",
 }
 FAKE_CRITIQUE = {
@@ -106,7 +109,7 @@ async def test_happy_path_persists_everything(session_factory, monkeypatch):
         for email in emails:
             assert email.subject == "Final subject"
             assert email.body == "Final body"
-            assert email.chosen_hook == "fake hook"
+            assert email.chosen_hook == "fake, hook"  # em-dash stripped at persistence
             assert email.source == "critic"
             assert email.send_status == "draft"
 
