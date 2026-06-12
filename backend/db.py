@@ -126,9 +126,15 @@ class Email(Base):
     body: Mapped[str] = mapped_column(Text)
     chosen_hook: Mapped[Optional[str]]
     source: Mapped[str] = mapped_column(default="critic")
+    # draft -> dry_run | sent -> delivered | bounced (webhook-updated)
     send_status: Mapped[str] = mapped_column(default="draft")
-    # Headroom for later Resend tracking, intentionally nullable now.
     provider_message_id: Mapped[Optional[str]]
+    # Nullable: demo targets carry no address; set at send time from the
+    # request body (or the target row, when one exists there).
+    recipient_email: Mapped[Optional[str]]
+    # Set only on REAL sends — the daily cap counts rows by this field, so a
+    # dry_run must never populate it.
+    sent_at: Mapped[Optional[datetime]]
     opened_at: Mapped[Optional[datetime]]
     replied_at: Mapped[Optional[datetime]]
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
@@ -138,8 +144,19 @@ class Email(Base):
 
 
 def init_db() -> None:
-    """Create the SQLite file and all tables if they do not already exist."""
+    """Create the SQLite file and all tables if they do not already exist,
+    then apply additive column migrations.
+
+    create_all never ALTERs existing tables, so columns added after a .db
+    file was first created are applied here by hand. Additive only — this
+    never drops, rewrites, or deletes anything.
+    """
     Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        existing = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(emails)")}
+        for column, ddl in (("recipient_email", "VARCHAR"), ("sent_at", "DATETIME")):
+            if column not in existing:
+                conn.exec_driver_sql(f"ALTER TABLE emails ADD COLUMN {column} {ddl}")
 
 
 if __name__ == "__main__":
