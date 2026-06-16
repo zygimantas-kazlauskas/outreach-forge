@@ -18,6 +18,7 @@ from sqlalchemy.orm import sessionmaker
 import events
 import main
 import orchestrator
+import send
 from db import Base
 from tests.test_orchestrator_wiring import TARGETS, _patch_agents
 
@@ -34,6 +35,10 @@ def api_db(tmp_path, monkeypatch):
     monkeypatch.setattr(orchestrator, "SessionLocal", factory)
     monkeypatch.setattr(orchestrator, "init_db", lambda: None)
     monkeypatch.setattr(main, "SessionLocal", factory)
+    # The send service holds its own SessionLocal/init_db; point them at the
+    # same throwaway DB so /emails/{id}/send sees the run's emails.
+    monkeypatch.setattr(send, "SessionLocal", factory)
+    monkeypatch.setattr(send, "init_db", lambda: None)
     events.bus.reset()
     return factory
 
@@ -120,9 +125,22 @@ async def test_full_run_flow_with_live_events(api_db, client, monkeypatch):
         assert email["send_status"] == "draft"
         assert email["target_name"] in {"Alpha Dental", "Beta Salon"}
 
-    # send stays a stub until Block 6
-    send = await client.post(f"/emails/{emails[0]['email_id']}/send")
-    assert send.status_code == 501
+    # send is real now and defaults to dry_run: no network, row marked dry_run.
+    # (Deep safety-layer coverage lives in test_send.py; this just proves the
+    # endpoint is wired end to end over the API.)
+    sent = await client.post(
+        f"/emails/{emails[0]['email_id']}/send",
+        json={"recipient_email": "lead@example.com"},
+    )
+    assert sent.status_code == 200
+    body = sent.json()
+    assert body["mode"] == "dry_run"
+    assert body["send_status"] == "dry_run"
+    assert body["recipient_email"] == "lead@example.com"
+    assert body["provider_message_id"].startswith("dry-run-")
+    check_names = {c["check"] for c in body["checks"]}
+    assert {"recipient", "suppressed", "mode"} <= check_names
+
     missing_send = await client.post("/emails/999/send")
     assert missing_send.status_code == 404
 

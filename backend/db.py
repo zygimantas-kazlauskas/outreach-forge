@@ -143,6 +143,18 @@ class Email(Base):
     target: Mapped["Target"] = relationship(back_populates="emails")
 
 
+class Unsubscribe(Base):
+    """Suppression list: any address here is refused at send time in every
+    mode, dry_run included. Addresses are stored normalized (lowercase)."""
+
+    __tablename__ = "unsubscribes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(unique=True, index=True)
+    ts: Mapped[datetime] = mapped_column(default=_utcnow)
+    source: Mapped[str] = mapped_column(default="manual")  # manual/complaint/link
+
+
 def init_db() -> None:
     """Create the SQLite file and all tables if they do not already exist,
     then apply additive column migrations.
@@ -154,7 +166,13 @@ def init_db() -> None:
     Base.metadata.create_all(engine)
     with engine.begin() as conn:
         existing = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(emails)")}
-        for column, ddl in (("recipient_email", "VARCHAR"), ("sent_at", "DATETIME")):
+        for column, ddl in (
+            ("recipient_email", "VARCHAR"),
+            ("sent_at", "DATETIME"),
+            ("provider_message_id", "VARCHAR"),
+            ("opened_at", "DATETIME"),
+            ("replied_at", "DATETIME"),
+        ):
             if column not in existing:
                 conn.exec_driver_sql(f"ALTER TABLE emails ADD COLUMN {column} {ddl}")
 

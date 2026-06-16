@@ -18,7 +18,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 import orchestrator
-from db import Email, Run, SessionLocal, Target
+import send
+from db import Run, SessionLocal, Target
 from events import TERMINAL_EVENT, bus
 
 app = FastAPI(title="Outreach Forge API", version="0.4.0")
@@ -50,6 +51,17 @@ class RunCreate(BaseModel):
     service_id: str
     targets: list[TargetIn] = Field(min_length=1)
     concurrency: int = Field(default=3, ge=1, le=10)
+
+
+class SendIn(BaseModel):
+    # Optional override; when omitted the recipient is resolved from the
+    # target row. The send is refused if neither yields an address.
+    recipient_email: Optional[str] = None
+
+
+class UnsubscribeIn(BaseModel):
+    email: str = Field(min_length=1)
+    source: str = "manual"
 
 
 def _load_service_by_id(service_id: str) -> dict[str, Any] | None:
@@ -105,11 +117,6 @@ def _emails_for_run(run_id: int) -> list[dict[str, Any]] | None:
             }
             for e in run.emails
         ]
-
-
-def _email_exists(email_id: int) -> bool:
-    with SessionLocal() as session:
-        return session.get(Email, email_id) is not None
 
 
 # --- routes -------------------------------------------------------------------
@@ -200,8 +207,30 @@ async def get_run_emails(run_id: int) -> list[dict[str, Any]]:
 
 
 @app.post("/emails/{email_id}/send")
-async def send_email(email_id: int) -> None:
-    """Stub until Resend integration lands in Block 6."""
-    if not await asyncio.to_thread(_email_exists, email_id):
-        raise HTTPException(404, f"Email {email_id} not found")
-    raise HTTPException(501, "Email sending ships in Block 6 (Resend); this endpoint is a stub.")
+async def send_email(email_id: int, payload: SendIn | None = None) -> dict[str, Any]:
+    """Send one drafted email through every safety layer in send.py.
+
+    Defaults to dry_run (SEND_MODE unset) — no network call, the row is marked
+    send_status='dry_run' with a fake provider id. A real send needs every
+    safety layer to pass simultaneously (see docs/sending-safety.md). The
+    response reports the mode and each check that was applied. A refusal maps
+    to the layer's HTTP status with the failing check named.
+    """
+    recipient_override = payload.recipient_email if payload else None
+    try:
+        return await send.send_email(email_id, recipient_override)
+    except send.SendRefused as refusal:
+        raise HTTPException(
+            refusal.http_status,
+            {"check": refusal.check, "reason": refusal.reason},
+        )
+
+
+@app.post("/unsubscribes", status_code=201)
+async def add_unsubscribe(payload: UnsubscribeIn) -> dict[str, Any]:
+    """Manually add an address to the suppression list. Idempotent: re-adding
+    an existing address is a no-op (created=false)."""
+    created = await asyncio.to_thread(
+        send.record_unsubscribe, payload.email, payload.source
+    )
+    return {"email": send.normalize_email(payload.email), "created": created}

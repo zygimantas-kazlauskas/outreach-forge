@@ -44,7 +44,7 @@ import httpx
 from dotenv import load_dotenv
 from sqlalchemy import select
 
-from db import Email, SessionLocal, Target, init_db
+from db import Email, SessionLocal, Target, Unsubscribe, init_db
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
@@ -53,6 +53,16 @@ logger = logging.getLogger("outreach_forge.send")
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 SEND_LOG_PATH = Path(__file__).resolve().parent / "logs" / "send_log.jsonl"
 DEFAULT_DAILY_LIMIT = 20
+
+# Appended to every OUTBOUND body (the stored draft stays clean). Plain text,
+# reply-to-opt-out: a real one-click unsubscribe link needs the deployed URL
+# from Block 7 (https://<app>/unsubscribe?...); until then replies are
+# recorded manually via POST /unsubscribes.
+UNSUBSCRIBE_FOOTER = (
+    "\n\n--\n"
+    'Don\'t want emails like this? Reply "unsubscribe" and I\'ll remove you '
+    "immediately."
+)
 
 
 class SendRefused(Exception):
@@ -93,6 +103,37 @@ def daily_limit() -> int:
 
 def normalize_email(address: str) -> str:
     return address.strip().lower()
+
+
+# --- suppression list ----------------------------------------------------------
+
+
+def _is_suppressed(session, address: str) -> bool:
+    return (
+        session.scalars(select(Unsubscribe).where(Unsubscribe.email == normalize_email(address))).first()
+        is not None
+    )
+
+
+def _add_unsubscribe(session, address: str, source: str) -> bool:
+    """Idempotent insert into the suppression list. Returns True if a new
+    row was created. Caller commits."""
+    address = normalize_email(address)
+    if not address:
+        return False
+    if session.scalars(select(Unsubscribe).where(Unsubscribe.email == address)).first() is not None:
+        return False
+    session.add(Unsubscribe(email=address, source=source))
+    return True
+
+
+def record_unsubscribe(address: str, source: str = "manual") -> bool:
+    """Sync entry point for the API; call via asyncio.to_thread."""
+    init_db()
+    with SessionLocal() as session:
+        created = _add_unsubscribe(session, address, source)
+        session.commit()
+    return created
 
 
 # --- sync DB helpers, called via asyncio.to_thread ----------------------------
@@ -154,11 +195,23 @@ def _prepare(email_id: int, recipient_override: Optional[str]) -> dict[str, Any]
         recipient = _resolve_recipient(session, email, recipient_override)
         checks.append({"check": "recipient", "result": recipient})
 
+        # Suppression is enforced in EVERY mode, dry_run included — an
+        # unsubscribed address must never be a send target, even hypothetically.
+        if _is_suppressed(session, recipient):
+            raise SendRefused(
+                "suppressed",
+                f"{recipient!r} is on the unsubscribe list; refusing the send in every mode",
+                403,
+            )
+        checks.append({"check": "suppressed", "result": "passed (not on the unsubscribe list)"})
+
         plan: dict[str, Any] = {
             "mode": mode,
             "recipient": recipient,
             "subject": email.subject,
-            "outbound_body": email.body,
+            # The stored draft stays clean; the opt-out footer is added only to
+            # the body that actually goes out (and to the dry_run audit record).
+            "outbound_body": email.body + UNSUBSCRIBE_FOOTER,
             "checks": checks,
         }
 
