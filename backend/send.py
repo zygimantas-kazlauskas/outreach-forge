@@ -32,6 +32,10 @@ short-lived Session each, always called via asyncio.to_thread.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -134,6 +138,116 @@ def record_unsubscribe(address: str, source: str = "manual") -> bool:
         created = _add_unsubscribe(session, address, source)
         session.commit()
     return created
+
+
+# --- webhooks ------------------------------------------------------------------
+#
+# Resend signs webhooks with the Svix scheme: the signed content is
+# "{svix-id}.{svix-timestamp}.{raw-body}", HMAC-SHA256'd with the secret, and
+# base64-encoded. The svix-signature header is a space-delimited list of
+# "v1,<sig>" entries; any match verifies. We implement it directly (a few
+# lines of stdlib hmac) rather than add the svix package — one fewer dep, and
+# the algorithm is stable and trivially testable with synthetic payloads.
+
+
+def _webhook_secret_bytes(secret: str) -> bytes:
+    """Svix secrets are prefixed 'whsec_'; the remainder is base64."""
+    key = secret.split("_", 1)[1] if secret.startswith("whsec_") else secret
+    return base64.b64decode(key)
+
+
+def compute_webhook_signature(secret: str, svix_id: str, svix_timestamp: str, body: str) -> str:
+    signed = f"{svix_id}.{svix_timestamp}.{body}".encode("utf-8")
+    digest = hmac.new(_webhook_secret_bytes(secret), signed, hashlib.sha256).digest()
+    return base64.b64encode(digest).decode("ascii")
+
+
+def verify_webhook_signature(
+    secret: str, svix_id: str, svix_timestamp: str, body: str, signature_header: str
+) -> bool:
+    """Constant-time check of the svix-signature header. Missing pieces or a
+    malformed secret fail closed (False), never raise."""
+    if not (secret and svix_id and svix_timestamp and signature_header):
+        return False
+    try:
+        expected = compute_webhook_signature(secret, svix_id, svix_timestamp, body)
+    except (binascii.Error, ValueError):
+        return False
+    for part in signature_header.split():
+        _, _, sig = part.partition(",")  # entries look like "v1,<base64>"
+        if sig and hmac.compare_digest(sig, expected):
+            return True
+    return False
+
+
+def _event_time(event: dict[str, Any]) -> datetime:
+    raw = event.get("created_at")
+    if isinstance(raw, str):
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    return datetime.now(timezone.utc)
+
+
+def _complaint_addresses(data: dict[str, Any], email: Optional[Email]) -> list[str]:
+    addrs: list[str] = []
+    to = data.get("to")
+    if isinstance(to, str):
+        addrs.append(to)
+    elif isinstance(to, list):
+        addrs.extend(str(a) for a in to)
+    if email is not None and email.recipient_email:
+        addrs.append(email.recipient_email)
+    return addrs
+
+
+def process_webhook_event(event: dict[str, Any]) -> dict[str, Any]:
+    """Apply one verified Resend event to the DB. Sync; call via to_thread.
+
+    delivered -> send_status='delivered'; opened -> opened_at; bounced ->
+    send_status='bounced'; complained -> the address is auto-added to the
+    unsubscribe list (source='complaint'). Unknown types are a no-op.
+    """
+    init_db()
+    etype = str(event.get("type", ""))
+    data = event.get("data") or {}
+    provider_id = str(data.get("email_id") or "")
+    applied: list[str] = []
+
+    with SessionLocal() as session:
+        email = None
+        if provider_id:
+            email = session.scalars(
+                select(Email).where(Email.provider_message_id == provider_id)
+            ).first()
+
+        if etype == "email.delivered":
+            if email is not None:
+                email.send_status = "delivered"
+                applied.append("send_status=delivered")
+        elif etype == "email.opened":
+            if email is not None:
+                email.opened_at = _event_time(event)
+                applied.append("opened_at set")
+        elif etype == "email.bounced":
+            if email is not None:
+                email.send_status = "bounced"
+                applied.append("send_status=bounced")
+        elif etype == "email.complained":
+            # A complaint is a hard opt-out signal: suppress every address on
+            # the event so we can never mail them again, in any mode.
+            for addr in _complaint_addresses(data, email):
+                if _add_unsubscribe(session, addr, "complaint"):
+                    applied.append(f"unsubscribed {normalize_email(addr)}")
+
+        if email is None and etype in ("email.delivered", "email.opened", "email.bounced"):
+            applied.append(f"no email row for provider_message_id {provider_id!r}")
+
+        session.commit()
+
+    _audit({"event": "webhook", "type": etype, "provider_message_id": provider_id, "applied": applied})
+    return {"type": etype, "provider_message_id": provider_id, "applied": applied}
 
 
 # --- sync DB helpers, called via asyncio.to_thread ----------------------------

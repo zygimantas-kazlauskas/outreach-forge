@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -234,3 +235,31 @@ async def add_unsubscribe(payload: UnsubscribeIn) -> dict[str, Any]:
         send.record_unsubscribe, payload.email, payload.source
     )
     return {"email": send.normalize_email(payload.email), "created": created}
+
+
+@app.post("/webhooks/resend")
+async def resend_webhook(request: Request) -> dict[str, Any]:
+    """Receive Resend delivery events. The signature is verified against
+    RESEND_WEBHOOK_SECRET before anything is applied; an unverifiable request
+    is rejected. A 'complained' event auto-suppresses the address; a bounce
+    marks the row bounced; delivered/opened update the row's status/opened_at.
+    """
+    body = (await request.body()).decode("utf-8")
+    secret = os.environ.get("RESEND_WEBHOOK_SECRET", "").strip()
+    if not secret:
+        # Fail closed: without a secret we cannot trust any payload.
+        raise HTTPException(503, "RESEND_WEBHOOK_SECRET is not configured; cannot verify webhooks")
+    verified = send.verify_webhook_signature(
+        secret,
+        request.headers.get("svix-id", ""),
+        request.headers.get("svix-timestamp", ""),
+        body,
+        request.headers.get("svix-signature", ""),
+    )
+    if not verified:
+        raise HTTPException(400, "Invalid webhook signature")
+    try:
+        event = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Webhook body is not valid JSON")
+    return await asyncio.to_thread(send.process_webhook_event, event)
