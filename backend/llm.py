@@ -56,6 +56,21 @@ def _log(entry: dict[str, Any]) -> None:
         pass
 
 
+def _usage_dict(response: Any) -> dict[str, Any]:
+    """Token usage for the log line, turning estimated cost into measured cost.
+    Includes the prompt-cache counters (populated once the system prompt is
+    cached, see E1). Returns {} when the response carries no usage."""
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return {}
+    return {
+        "input_tokens": getattr(usage, "input_tokens", None),
+        "output_tokens": getattr(usage, "output_tokens", None),
+        "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", None),
+        "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", None),
+    }
+
+
 async def llm_call(
     system_prompt: str,
     user_message: str,
@@ -142,6 +157,7 @@ async def llm_call(
                 "latency_ms": latency_ms,
                 "status": "success",
                 "attempt": attempt,
+                **_usage_dict(response),
             }, response=result)
             return result
 
@@ -155,6 +171,7 @@ async def llm_call(
             "status": "retry" if attempt == 1 else "error",
             "error": last_error,
             "attempt": attempt,
+            **_usage_dict(response),
         })
 
         messages.append({"role": "assistant", "content": response.content})
