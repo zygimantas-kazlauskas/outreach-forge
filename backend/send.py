@@ -137,8 +137,8 @@ def _add_unsubscribe(session, address: str, source: str) -> bool:
 
 
 def record_unsubscribe(address: str, source: str = "manual") -> bool:
-    """Sync entry point for the API; call via asyncio.to_thread."""
-    init_db()
+    """Sync entry point for the API; call via asyncio.to_thread. Schema is
+    ensured once at app startup (main.lifespan)."""
     with SessionLocal() as session:
         created = _add_unsubscribe(session, address, source)
         session.commit()
@@ -228,7 +228,6 @@ def process_webhook_event(event: dict[str, Any]) -> dict[str, Any]:
     suppressed source='bounce'); complained -> the address is auto-added to the
     unsubscribe list (source='complaint'). Unknown types are a no-op.
     """
-    init_db()
     etype = str(event.get("type", ""))
     data = event.get("data") or {}
     provider_id = str(data.get("email_id") or "")
@@ -298,9 +297,13 @@ def _resolve_recipient(session, email: Email, override: Optional[str]) -> str:
         target = session.get(Target, email.target_id)
         if target is not None:
             try:
-                candidate = str(json.loads(target.raw_notes).get("email") or "").strip()
+                parsed = json.loads(target.raw_notes)
             except (json.JSONDecodeError, TypeError):
-                candidate = ""
+                parsed = None
+            # Guard like the orchestrator (orchestrator.py): valid JSON that
+            # isn't an object (str/list/null) has no "email" to read.
+            if isinstance(parsed, dict):
+                candidate = str(parsed.get("email") or "").strip()
     if not candidate:
         raise SendRefused(
             "recipient",
@@ -481,7 +484,6 @@ async def send_email(email_id: int, recipient_override: Optional[str] = None) ->
     Returns a result dict reporting the mode and each check applied.
     Raises SendRefused when any layer fails; the refusal is audited too.
     """
-    await asyncio.to_thread(init_db)
     try:
         plan = await asyncio.to_thread(_prepare, email_id, recipient_override)
     except SendRefused as refusal:

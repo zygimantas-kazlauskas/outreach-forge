@@ -1,7 +1,8 @@
 """API wiring tests. NO API calls — agents mocked, throwaway DB, ASGI transport.
 
-Covers the full Block 4 surface: POST /runs background kickoff, SSE event
-stream (live and replay), run snapshot, emails listing, and the send stub.
+Covers the run surface (POST /runs background kickoff, SSE event stream live and
+replay, run snapshot, emails listing), the real dry_run send over the API, the
+startup lifespan that builds the schema, and the Block 6 webhook endpoint.
 """
 
 from __future__ import annotations
@@ -100,6 +101,27 @@ async def test_get_missing_run_is_404(api_db, client):
     for path in ("/runs/999", "/runs/999/events", "/runs/999/emails"):
         response = await client.get(path)
         assert response.status_code == 404, path
+
+
+@pytest.mark.asyncio
+async def test_startup_lifespan_creates_schema_so_fresh_db_get_is_404(tmp_path, monkeypatch):
+    # A brand-new DB file with NO tables created up front (unlike the api_db fixture).
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'fresh.db'}",
+        connect_args={"check_same_thread": False},
+    )
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    monkeypatch.setattr(main, "SessionLocal", factory)
+    # The startup lifespan must build the schema; point its init_db at this engine.
+    monkeypatch.setattr(main, "init_db", lambda: Base.metadata.create_all(engine))
+
+    async with main.app.router.lifespan_context(main.app):
+        transport = httpx.ASGITransport(app=main.app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+            resp = await c.get("/runs/1")
+    # The schema exists because the lifespan ran, so a missing run is a clean 404.
+    # Without the startup init_db this GET would hit a missing table and 500.
+    assert resp.status_code == 404
 
 
 @pytest.mark.asyncio

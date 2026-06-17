@@ -229,8 +229,8 @@ async def create_run(
 ) -> tuple[int, list[tuple[int, str]]]:
     """Persist the run + target rows and return (run_id, rows) without
     executing anything. Lets the API return the run id immediately and run
-    execute_run as a background task."""
-    await asyncio.to_thread(init_db)
+    execute_run as a background task. The schema is ensured once at app startup
+    (main.lifespan), not per call."""
     return await asyncio.to_thread(_create_run_and_targets, targets, service_spec)
 
 

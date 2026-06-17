@@ -13,6 +13,8 @@ import os
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -20,10 +22,22 @@ from pydantic import BaseModel, Field
 
 import orchestrator
 import send
-from db import Run, SessionLocal, Target
+from db import Run, SessionLocal, Target, init_db
 from events import TERMINAL_EVENT, bus
 
-app = FastAPI(title="Outreach Forge API", version="0.4.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create the SQLite schema (and apply additive migrations) exactly once at
+    # startup, so every request — including a read on a fresh DB — sees a ready
+    # schema and a missing run is a clean 404, not a 500. Replaces the
+    # per-request init_db() calls the entry points used to make. init_db is
+    # idempotent.
+    await asyncio.to_thread(init_db)
+    yield
+
+
+app = FastAPI(title="Outreach Forge API", version="0.6.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
