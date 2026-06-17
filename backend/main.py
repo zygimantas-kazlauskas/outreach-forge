@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
@@ -263,10 +264,15 @@ async def resend_webhook(request: Request) -> dict[str, Any]:
     if not secret:
         # Fail closed: without a secret we cannot trust any payload.
         raise HTTPException(503, "RESEND_WEBHOOK_SECRET is not configured; cannot verify webhooks")
+    timestamp = request.headers.get("svix-timestamp", "")
+    # Reject stale/replayed (or future-dated) payloads before the HMAC check, so
+    # a captured valid payload cannot be replayed indefinitely.
+    if not send.webhook_timestamp_fresh(timestamp, time.time()):
+        raise HTTPException(400, "Invalid or stale webhook timestamp")
     verified = send.verify_webhook_signature(
         secret,
         request.headers.get("svix-id", ""),
-        request.headers.get("svix-timestamp", ""),
+        timestamp,
         body,
         request.headers.get("svix-signature", ""),
     )

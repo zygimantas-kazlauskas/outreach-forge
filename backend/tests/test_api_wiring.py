@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import time
 
 import httpx
 import pytest
@@ -28,10 +29,11 @@ WEBHOOK_SECRET = "whsec_" + base64.b64encode(b"api-test-signing-key").decode()
 
 
 def _signed_headers(body: str) -> dict[str, str]:
-    sig = send.compute_webhook_signature(WEBHOOK_SECRET, "msg_api", "1700000000", body)
+    ts = str(int(time.time()))  # fresh, so it passes the replay window
+    sig = send.compute_webhook_signature(WEBHOOK_SECRET, "msg_api", ts, body)
     return {
         "svix-id": "msg_api",
-        "svix-timestamp": "1700000000",
+        "svix-timestamp": ts,
         "svix-signature": f"v1,{sig}",
     }
 
@@ -235,7 +237,24 @@ async def test_webhook_rejects_a_bad_signature(api_db, client, monkeypatch):
     resp = await client.post(
         "/webhooks/resend",
         content=body,
-        headers={"svix-id": "m", "svix-timestamp": "1", "svix-signature": "v1,wrong"},
+        # Fresh timestamp (passes the replay window) so the signature is what fails.
+        headers={"svix-id": "m", "svix-timestamp": str(int(time.time())), "svix-signature": "v1,wrong"},
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_webhook_rejects_a_stale_timestamp(api_db, client, monkeypatch):
+    monkeypatch.setenv("RESEND_WEBHOOK_SECRET", WEBHOOK_SECRET)
+    body = json.dumps({"type": "email.delivered", "data": {"email_id": "x"}})
+    # ~67 minutes old: a correctly-signed payload that must still be rejected as
+    # a replay (signature is valid; only the timestamp is stale).
+    stale = str(int(time.time()) - 4000)
+    sig = send.compute_webhook_signature(WEBHOOK_SECRET, "msg_api", stale, body)
+    resp = await client.post(
+        "/webhooks/resend",
+        content=body,
+        headers={"svix-id": "msg_api", "svix-timestamp": stale, "svix-signature": f"v1,{sig}"},
     )
     assert resp.status_code == 400
 

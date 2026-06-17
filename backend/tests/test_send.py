@@ -332,6 +332,16 @@ def test_webhook_signature_roundtrip():
     assert not send.verify_webhook_signature("", "msg_1", "1700000000", "{}", f"v1,{sig}")
 
 
+def test_webhook_timestamp_freshness_window():
+    now = 1_700_000_000.0  # explicit "now" keeps this deterministic
+    assert send.webhook_timestamp_fresh("1700000000", now)              # exact
+    assert send.webhook_timestamp_fresh(str(int(now) - 299), now)       # just inside
+    assert not send.webhook_timestamp_fresh(str(int(now) - 4000), now)  # stale (replay)
+    assert not send.webhook_timestamp_fresh(str(int(now) + 4000), now)  # future-dated
+    assert not send.webhook_timestamp_fresh("", now)                    # missing
+    assert not send.webhook_timestamp_fresh("not-a-number", now)        # malformed
+
+
 # --- webhook event processing -------------------------------------------------
 
 

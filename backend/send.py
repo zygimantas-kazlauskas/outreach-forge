@@ -185,6 +185,23 @@ def verify_webhook_signature(
     return False
 
 
+WEBHOOK_TOLERANCE_SECONDS = 300
+
+
+def webhook_timestamp_fresh(
+    svix_timestamp: str, now_ts: float, tolerance_seconds: int = WEBHOOK_TOLERANCE_SECONDS
+) -> bool:
+    """True only if svix-timestamp is within +/- tolerance of now. Replay
+    defense: a captured-but-old (or future-dated) payload is refused even with a
+    valid signature. Missing/malformed timestamps fail closed (False). `now_ts`
+    is passed in (not read here) so the check stays deterministic and testable."""
+    try:
+        ts = int(svix_timestamp)
+    except (TypeError, ValueError):
+        return False
+    return abs(now_ts - ts) <= tolerance_seconds
+
+
 def _event_time(event: dict[str, Any]) -> datetime:
     raw = event.get("created_at")
     if isinstance(raw, str):
