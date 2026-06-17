@@ -46,7 +46,7 @@ from typing import Any, Optional
 
 import httpx
 from dotenv import load_dotenv
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from db import Email, SessionLocal, Target, Unsubscribe, init_db
 
@@ -57,6 +57,10 @@ logger = logging.getLogger("outreach_forge.send")
 RESEND_ENDPOINT = "https://api.resend.com/emails"
 SEND_LOG_PATH = Path(__file__).resolve().parent / "logs" / "send_log.jsonl"
 DEFAULT_DAILY_LIMIT = 20
+
+# Statuses that mean "do not (re)send". Both the pre-flight guard in _prepare
+# and the atomic claim (_claim_for_send) refuse a row already in one of these.
+ALREADY_SENT_STATUSES = ("sent", "delivered")
 
 # Appended to every OUTBOUND body (the stored draft stays clean). Plain text,
 # reply-to-opt-out: a real one-click unsubscribe link needs the deployed URL
@@ -298,7 +302,7 @@ def _prepare(email_id: int, recipient_override: Optional[str]) -> dict[str, Any]
         email = session.get(Email, email_id)
         if email is None:
             raise SendRefused("exists", f"Email {email_id} not found", 404)
-        if email.send_status in ("sent", "delivered"):
+        if email.send_status in ALREADY_SENT_STATUSES:
             raise SendRefused(
                 "already_sent",
                 f"Email {email_id} was already sent (status {email.send_status!r}); refusing a duplicate send",
@@ -373,6 +377,36 @@ def _prepare(email_id: int, recipient_override: Optional[str]) -> dict[str, Any]
         plan["api_key"] = api_key
         plan["sender"] = sender
         return plan
+
+
+def _claim_for_send(email_id: int) -> bool:
+    """Atomically claim a row for a real send. Flips draft->'sending' in a
+    single UPDATE guarded on the current status; returns True only if THIS
+    caller won (rowcount == 1). Two concurrent sends of the same id race here
+    and exactly one wins, which is what makes a duplicate real send impossible."""
+    with SessionLocal() as session:
+        result = session.execute(
+            update(Email)
+            .where(
+                Email.id == email_id,
+                Email.send_status.not_in(ALREADY_SENT_STATUSES + ("sending",)),
+            )
+            .values(send_status="sending")
+        )
+        session.commit()
+        return result.rowcount == 1
+
+
+def _release_claim(email_id: int) -> None:
+    """Undo a claim after a failed send so a legitimate retry can proceed.
+    Only touches rows still in 'sending' (never clobbers a terminal status)."""
+    with SessionLocal() as session:
+        session.execute(
+            update(Email)
+            .where(Email.id == email_id, Email.send_status == "sending")
+            .values(send_status="draft")
+        )
+        session.commit()
 
 
 def _mark_send_result(
@@ -457,6 +491,20 @@ async def send_email(email_id: int, recipient_override: Optional[str] = None) ->
             "checks": plan["checks"],
         }
 
+    # A1: atomically claim the row before any network call. The single UPDATE
+    # ... WHERE is the concurrency guard — of two simultaneous live sends of the
+    # same id, exactly one flips draft->sending and proceeds; the other loses the
+    # claim and is refused, so a real email can never leave the machine twice.
+    claimed = await asyncio.to_thread(_claim_for_send, email_id)
+    if not claimed:
+        refusal = SendRefused(
+            "already_sent",
+            f"Email {email_id} is already sent or in flight; refusing a duplicate send",
+            409,
+        )
+        _audit({"event": "refused", "email_id": email_id, "check": refusal.check, "reason": refusal.reason})
+        raise refusal
+
     payload = {
         "from": plan["sender"],
         "to": [plan["recipient"]],
@@ -466,7 +514,14 @@ async def send_email(email_id: int, recipient_override: Optional[str] = None) ->
     try:
         data = await _post_resend(plan["api_key"], payload)
     except SendRefused as refusal:
+        # Release the claim so a legitimate retry can proceed.
+        await asyncio.to_thread(_release_claim, email_id)
         _audit({"event": "provider_error", "email_id": email_id, "reason": refusal.reason})
+        raise
+    except Exception:
+        # Transport error (timeout, connection reset): release the claim too,
+        # then let it surface unchanged (a raw 500 at the API edge).
+        await asyncio.to_thread(_release_claim, email_id)
         raise
     provider_id = str(data.get("id", ""))
     await asyncio.to_thread(

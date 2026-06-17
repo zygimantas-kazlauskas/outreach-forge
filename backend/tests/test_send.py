@@ -9,6 +9,7 @@ check and event processing (delivered/opened/bounced/complained).
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 from datetime import datetime, timezone
@@ -263,6 +264,60 @@ async def test_live_send_calls_resend_once_and_marks_sent(send_db, network, monk
         assert row.sent_at is not None
         assert row.provider_message_id == "resend-xyz789"
         assert row.body == "Hi."  # stored draft never carries the footer
+
+
+# --- A1: atomic send-claim (no double-send under concurrency) ------------------
+
+
+@pytest.mark.asyncio
+async def test_send_claim_is_atomic_exactly_one_winner(send_db):
+    eid = _seed_email(send_db)
+    # Two claims race on the same row; the guarded UPDATE lets exactly one win.
+    results = await asyncio.gather(
+        asyncio.to_thread(send._claim_for_send, eid),
+        asyncio.to_thread(send._claim_for_send, eid),
+    )
+    assert sum(bool(r) for r in results) == 1
+    with send_db() as s:
+        assert s.get(Email, eid).send_status == "sending"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_live_sends_only_one_reaches_the_wire(send_db, network, monkeypatch):
+    _arm_live(monkeypatch, allowlist="ok@example.com")
+    eid = _seed_email(send_db, body="Hi.")
+
+    results = await asyncio.gather(
+        send.send_email(eid, "ok@example.com"),
+        send.send_email(eid, "ok@example.com"),
+        return_exceptions=True,
+    )
+
+    assert len(network.calls) == 1  # the race never double-sends
+    sent = [r for r in results if isinstance(r, dict)]
+    refused = [r for r in results if isinstance(r, send.SendRefused)]
+    assert len(sent) == 1 and sent[0]["send_status"] == "sent"
+    assert len(refused) == 1 and refused[0].check == "already_sent"
+
+    with send_db() as s:
+        assert s.get(Email, eid).send_status == "sent"
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_releases_claim_for_retry(send_db, network, monkeypatch):
+    _arm_live(monkeypatch, allowlist="ok@example.com")
+    eid = _seed_email(send_db, body="Hi.")
+
+    async def boom(api_key, payload):
+        raise send.SendRefused("provider", "Resend returned 500", 502)
+
+    monkeypatch.setattr(send, "_post_resend", boom)
+    with pytest.raises(send.SendRefused):
+        await send.send_email(eid, "ok@example.com")
+
+    # Claim released back to draft so a legitimate retry can proceed.
+    with send_db() as s:
+        assert s.get(Email, eid).send_status == "draft"
 
 
 # --- webhook signature verification -------------------------------------------
