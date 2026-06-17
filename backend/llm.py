@@ -91,13 +91,22 @@ async def llm_call(
     messages: list[dict[str, Any]] = [{"role": "user", "content": user_message}]
     last_error: str | None = None
 
+    # The agent system prompts are large and identical across every target and
+    # every run, so mark the system block for prompt caching: the API caches it
+    # on the first call and reads it back cheaply on subsequent ones (5-min TTL).
+    # Wrapper-only — the prompt TEXT is untouched; this just sends it as a single
+    # cache-controlled content block instead of a bare string.
+    system_blocks = [
+        {"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}
+    ]
+
     for attempt in (1, 2):
         start = time.perf_counter()
         try:
             response = await client.messages.create(
                 model=model,
                 max_tokens=max_tokens,
-                system=system_prompt,
+                system=system_blocks,
                 tools=[response_schema],
                 tool_choice={"type": "tool", "name": tool_name},
                 messages=messages,
