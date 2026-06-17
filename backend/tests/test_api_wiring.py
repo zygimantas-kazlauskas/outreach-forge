@@ -220,6 +220,29 @@ async def test_failed_target_reported_in_events_and_snapshot(api_db, client, mon
     assert snapshot["emails"] == 1
 
 
+# --- unsubscribes endpoint ----------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_post_unsubscribes_creates_normalizes_and_is_idempotent(api_db, client):
+    # First add: created, and the address is normalized (case + whitespace).
+    first = await client.post("/unsubscribes", json={"email": "  Opt.Out@Example.COM "})
+    assert first.status_code == 201
+    assert first.json() == {"email": "opt.out@example.com", "created": True}
+
+    # Re-adding the same address (different case) is idempotent: created=False.
+    again = await client.post("/unsubscribes", json={"email": "opt.out@example.com"})
+    assert again.status_code == 201
+    assert again.json() == {"email": "opt.out@example.com", "created": False}
+
+    # Exactly one row exists, stored normalized, with the default manual source.
+    with api_db() as s:
+        rows = s.scalars(
+            select(Unsubscribe).where(Unsubscribe.email == "opt.out@example.com")
+        ).all()
+        assert len(rows) == 1 and rows[0].source == "manual"
+
+
 # --- webhook endpoint ---------------------------------------------------------
 
 
