@@ -375,3 +375,54 @@ async def test_complaint_webhook_suppresses_and_blocks_future_sends(send_db, net
         await send.send_email(eid, "angry@example.com")
     assert exc.value.check == "suppressed"
     assert network.calls == []
+
+
+# --- B1: hard bounces suppress, soft bounces do not ---------------------------
+
+
+@pytest.mark.asyncio
+async def test_hard_bounce_suppresses_and_blocks_future_sends(send_db, network):
+    eid = _seed_email(send_db, provider_message_id="pm-hb", recipient_email="gone@example.com")
+
+    applied = send.process_webhook_event(
+        {
+            "type": "email.bounced",
+            "data": {"email_id": "pm-hb", "to": ["gone@example.com"], "bounce": {"type": "Permanent"}},
+        }
+    )
+    assert any("hard bounce" in a for a in applied["applied"])
+
+    with send_db() as s:
+        assert s.get(Email, eid).send_status == "bounced"
+        row = s.scalars(select(Unsubscribe).where(Unsubscribe.email == "gone@example.com")).first()
+        assert row is not None and row.source == "bounce"
+
+    # A hard-bounced address can never be a send target again (any row, any mode).
+    other = _seed_email(send_db, recipient_email=None)
+    with pytest.raises(send.SendRefused) as exc:
+        await send.send_email(other, "gone@example.com")
+    assert exc.value.check == "suppressed"
+    # And the bounced row itself is refused as already-sent (not re-sendable).
+    with pytest.raises(send.SendRefused) as exc2:
+        await send.send_email(eid, "someone-else@example.com")
+    assert exc2.value.check == "already_sent"
+    assert network.calls == []
+
+
+def test_soft_bounce_marks_row_but_does_not_suppress(send_db):
+    eid = _seed_email(send_db, provider_message_id="pm-sb", recipient_email="busy@example.com")
+
+    applied = send.process_webhook_event(
+        {
+            "type": "email.bounced",
+            "data": {"email_id": "pm-sb", "to": ["busy@example.com"], "bounce": {"type": "Transient"}},
+        }
+    )
+    assert not any("unsubscribed" in a for a in applied["applied"])
+
+    with send_db() as s:
+        assert s.get(Email, eid).send_status == "bounced"
+        assert (
+            s.scalars(select(Unsubscribe).where(Unsubscribe.email == "busy@example.com")).first()
+            is None  # transient bounce leaves the address sendable
+        )

@@ -60,7 +60,8 @@ DEFAULT_DAILY_LIMIT = 20
 
 # Statuses that mean "do not (re)send". Both the pre-flight guard in _prepare
 # and the atomic claim (_claim_for_send) refuse a row already in one of these.
-ALREADY_SENT_STATUSES = ("sent", "delivered")
+# 'bounced' is included so a hard-bounced row can never be re-sent (B1).
+ALREADY_SENT_STATUSES = ("sent", "delivered", "bounced")
 
 # Appended to every OUTBOUND body (the stored draft stays clean). Plain text,
 # reply-to-opt-out: a real one-click unsubscribe link needs the deployed URL
@@ -194,7 +195,9 @@ def _event_time(event: dict[str, Any]) -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _complaint_addresses(data: dict[str, Any], email: Optional[Email]) -> list[str]:
+def _event_recipients(data: dict[str, Any], email: Optional[Email]) -> list[str]:
+    """Addresses an event applies to: the event's `to` field plus the matched
+    row's recipient. Used by both the complaint and hard-bounce suppression."""
     addrs: list[str] = []
     to = data.get("to")
     if isinstance(to, str):
@@ -206,11 +209,23 @@ def _complaint_addresses(data: dict[str, Any], email: Optional[Email]) -> list[s
     return addrs
 
 
+def _bounce_is_hard(data: dict[str, Any]) -> bool:
+    """True only for a permanent/hard bounce. Resend nests bounce details under
+    data['bounce']; an explicit Permanent/hard type is a do-not-mail signal.
+    Anything missing or transient is treated as soft (left sendable), so an
+    ambiguous payload never over-suppresses an address we could still reach."""
+    bounce = data.get("bounce")
+    if not isinstance(bounce, dict):
+        return False
+    return str(bounce.get("type", "")).strip().lower() in ("permanent", "hard")
+
+
 def process_webhook_event(event: dict[str, Any]) -> dict[str, Any]:
     """Apply one verified Resend event to the DB. Sync; call via to_thread.
 
     delivered -> send_status='delivered'; opened -> opened_at; bounced ->
-    send_status='bounced'; complained -> the address is auto-added to the
+    send_status='bounced' (and, for a HARD bounce only, the address is
+    suppressed source='bounce'); complained -> the address is auto-added to the
     unsubscribe list (source='complaint'). Unknown types are a no-op.
     """
     init_db()
@@ -238,10 +253,17 @@ def process_webhook_event(event: dict[str, Any]) -> dict[str, Any]:
             if email is not None:
                 email.send_status = "bounced"
                 applied.append("send_status=bounced")
+            # A HARD (permanent) bounce is a do-not-mail signal: suppress every
+            # address on the event so no row ever mails them again. SOFT/
+            # transient bounces only mark the row and stay sendable.
+            if _bounce_is_hard(data):
+                for addr in _event_recipients(data, email):
+                    if _add_unsubscribe(session, addr, "bounce"):
+                        applied.append(f"unsubscribed {normalize_email(addr)} (hard bounce)")
         elif etype == "email.complained":
             # A complaint is a hard opt-out signal: suppress every address on
             # the event so we can never mail them again, in any mode.
-            for addr in _complaint_addresses(data, email):
+            for addr in _event_recipients(data, email):
                 if _add_unsubscribe(session, addr, "complaint"):
                     applied.append(f"unsubscribed {normalize_email(addr)}")
 
