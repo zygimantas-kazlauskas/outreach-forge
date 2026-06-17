@@ -14,6 +14,7 @@ import base64
 import json
 from datetime import datetime, timezone
 
+import httpx
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
@@ -316,6 +317,74 @@ async def test_provider_failure_releases_claim_for_retry(send_db, network, monke
         await send.send_email(eid, "ok@example.com")
 
     # Claim released back to draft so a legitimate retry can proceed.
+    with send_db() as s:
+        assert s.get(Email, eid).send_status == "draft"
+
+
+# --- D2: live provider / transport error paths --------------------------------
+
+
+@pytest.mark.asyncio
+async def test_post_resend_raises_provider_refusal_on_4xx_5xx(monkeypatch):
+    class FakeResp:
+        status_code = 500
+        text = "Internal Server Error"
+
+        def json(self):  # pragma: no cover - not reached on an error status
+            return {}
+
+    class FakeClient:
+        def __init__(self, *a, **k):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, *a, **k):
+            return FakeResp()
+
+    monkeypatch.setattr(send.httpx, "AsyncClient", FakeClient)
+    with pytest.raises(send.SendRefused) as exc:
+        await send._post_resend("re_key", {"to": ["x@example.com"]})
+    assert exc.value.check == "provider"
+    assert exc.value.http_status == 502
+
+
+@pytest.mark.asyncio
+async def test_live_provider_error_is_recorded_in_the_audit_log(send_db, network, monkeypatch):
+    _arm_live(monkeypatch, allowlist="ok@example.com")
+    eid = _seed_email(send_db, body="Hi.")
+
+    async def boom(api_key, payload):
+        raise send.SendRefused("provider", "Resend returned 500: boom", 502)
+
+    monkeypatch.setattr(send, "_post_resend", boom)
+    with pytest.raises(send.SendRefused):
+        await send.send_email(eid, "ok@example.com")
+
+    # The provider_error audit branch ran and was written to the audit trail.
+    records = [json.loads(l) for l in send.SEND_LOG_PATH.read_text(encoding="utf-8").splitlines()]
+    assert any(r.get("event") == "provider_error" and r.get("email_id") == eid for r in records)
+
+
+@pytest.mark.asyncio
+async def test_live_transport_error_propagates_and_releases_claim(send_db, network, monkeypatch):
+    _arm_live(monkeypatch, allowlist="ok@example.com")
+    eid = _seed_email(send_db, body="Hi.")
+
+    async def timed_out(api_key, payload):
+        raise httpx.ConnectTimeout("connection timed out")
+
+    monkeypatch.setattr(send, "_post_resend", timed_out)
+
+    # A non-SendRefused transport error is NOT converted: it propagates and at
+    # the API edge currently surfaces as a raw 500 (the route only catches
+    # SendRefused). The claim is released so a legitimate retry can proceed.
+    with pytest.raises(httpx.ConnectTimeout):
+        await send.send_email(eid, "ok@example.com")
     with send_db() as s:
         assert s.get(Email, eid).send_status == "draft"
 
