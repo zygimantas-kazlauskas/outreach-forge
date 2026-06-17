@@ -48,6 +48,9 @@ def _enable_sqlite_fk(dbapi_connection, connection_record) -> None:
     # but this keeps DB-level integrity honest too.
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
+    # Block 7 hardening (note only): for the orchestrator's concurrent-writer
+    # pattern, add `PRAGMA journal_mode=WAL` + a `busy_timeout` here to cut
+    # "database is locked" risk under load. Fine to defer at the current scale.
     cursor.close()
 
 
