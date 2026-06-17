@@ -73,3 +73,63 @@ in Block 6. All proven free: 11 wiring tests (5 orchestrator/events + 6 API
 over httpx ASGI transport) with mocked agents on throwaway DBs.
 
 Not done in this block: frontend, Resend, deploy.
+
+## Block 5 — frontend (see docs/frontend-testing.md)
+
+The Next.js UI (target intake, live run view with the SSE board, results grid)
+was built across its own evening sessions; its testing notes live in
+[frontend-testing.md](frontend-testing.md) rather than being duplicated here.
+
+## Block 6 — Resend sending behind a layered safety model (2026-06-12 → 2026-06-17)
+
+Spanned two sittings — 6a landed on the 12th, then a session hit its usage
+limit mid-block and the rest (6b–6d) was finished on the 17th, picking up from
+the committed state and the uncommitted 6b work in the tree. The design center
+of the whole block was the inverse of "make sending work": **make an accidental
+real send impossible.** Generating and sending are fully decoupled (the
+orchestrator never imports `send.py`), and a real send is gated behind several
+independent layers that must all pass at once. Everything is testable without
+Resend credentials — the one network seam, `send._post_resend`, is mocked, so
+dry-run and every refusal are *proven* to never reach the wire.
+
+- **6a.** `backend/send.py` over the Resend REST API via httpx (not the `resend`
+  pip package — it sets a module-global key that fights both the
+  read-config-at-call-time safety model and test isolation; the comment in the
+  file justifies the choice). Layers: `SEND_MODE` (dry_run default and on any
+  value other than exactly `live`, so typos fail safe; dry_run logs the
+  would-be send and marks the row `dry_run` with a fake provider id),
+  `RECIPIENT_ALLOWLIST`, and a DB-counted `SEND_DAILY_LIMIT` (default 20,
+  counted by `sent_at` so a dry_run never consumes quota). Every attempt is
+  appended to a gitignored `send_log.jsonl` audit trail. All config documented
+  in `.env.example`.
+- **6b.** Suppression + the real send endpoint. `unsubscribes` table; an address
+  on it is refused **in every mode, dry_run included**. A plain-text opt-out
+  footer is appended to every outbound body (the stored draft stays clean; a
+  real one-click link waits on the Block 7 deployed URL). `POST /emails/{id}/send`
+  promoted from the 501 stub to the real endpoint honoring all layers and
+  reporting which checks applied; the recipient comes from the request body or
+  the target row, and a missing one is refused. `POST /unsubscribes` for manual
+  additions. Extended the additive migration to cover
+  `provider_message_id`/`opened_at`/`replied_at`.
+- **6c.** `POST /webhooks/resend`. The Svix signature is verified against
+  `RESEND_WEBHOOK_SECRET` before anything is applied, and the endpoint fails
+  closed (503 with no secret, 400 on a bad signature). Verified events update
+  the row: delivered → `delivered`, opened → `opened_at`, bounced → `bounced`,
+  and a complaint auto-adds the address to `unsubscribes`. Signature
+  verification is a few lines of stdlib `hmac` rather than the `svix` dep.
+- **6d.** Tests + docs. `tests/test_send.py` covers every layer with the network
+  seam mocked and asserted against (dry_run never touches the wire, suppression
+  refusal even in dry_run, allowlist/daily-cap/config refusals, recipient
+  resolution, already-sent guard, a full live happy-path with the footer on the
+  wire, webhook signature round-trip, and the complaint→suppressed→future-send-
+  refused flow); API-level webhook tests (missing-secret 503, bad-signature 400,
+  valid complaint suppresses) live in `test_api_wiring.py`. New
+  [docs/sending-safety.md](sending-safety.md) documents the model and the
+  go-live steps; README status updated. A flagless `pytest tests/` now runs 35
+  free tests and skips the 4 paid ones.
+
+HARD GATES respected throughout: no real email was ever sent (the suite runs in
+dry_run with the network mocked), and `backend/.env` was never touched — only
+`.env.example`. Arming a live send remains a deliberate, multi-step act.
+
+Not done in this block: deploy, the real one-click unsubscribe link (both Block 7).

@@ -4,7 +4,9 @@ A multi-agent personalized B2B outreach engine. The engine itself is generic; th
 
 ## Status
 
-**Block 4 complete — REST API + live SSE on top of the pipeline.** `POST /runs` kicks off a batch as a background task and returns the run id immediately; `GET /runs/{id}/events` streams live agent activity over SSE (with history replay for late subscribers); `GET /runs/{id}` and `GET /runs/{id}/emails` expose status and final drafts. The orchestrator (Block 3) runs targets concurrently through the Researcher → Writer → Critic chain with SQLite persistence and per-target error isolation, verified end-to-end against the real API. Prompts have been through a measured tuning pass (see `docs/tuning/`). No frontend yet, no email sending (`POST /emails/{id}/send` returns 501 until Resend lands in Block 6).
+**Block 6 complete — Resend sending behind a layered safety model.** `POST /emails/{id}/send` now sends through Resend, but a real email needs *every* safety layer to pass at once: `SEND_MODE` must be exactly `live` (it defaults to dry_run — no network call ever, the row is marked `dry_run` with a fake provider id), the recipient must be on `RECIPIENT_ALLOWLIST` when one is set, the address must not be on the unsubscribe list (enforced in every mode), and the run must be under `SEND_DAILY_LIMIT` (DB-counted, UTC). Sending is decoupled from generation — the orchestrator never sends. A plain-text opt-out footer is appended to every outbound body, and `POST /webhooks/resend` ingests delivered/opened/bounced/complained events (Svix signature verified) with a complaint auto-suppressing the address. The full model and go-live steps are in [docs/sending-safety.md](docs/sending-safety.md). Everything is tested without Resend credentials by mocking the one network seam.
+
+Earlier blocks: the orchestrator (Block 3) runs targets concurrently through the Researcher → Writer → Critic chain with SQLite persistence and per-target error isolation; the REST API + live SSE (Block 4) expose runs and drafts; the Next.js frontend (Block 5) provides target intake, a live run view, and a results grid.
 
 ## Architecture
 
@@ -56,11 +58,9 @@ This project is being built across multiple focused evening sessions, not in a s
 
 ## What's next
 
-The following blocks are planned but **not yet implemented**:
+The following block is planned but **not yet implemented**:
 
-- **Block 5** — Frontend UI: target intake, run view with live agent feed, results table.
-- **Block 6** — Resend integration for outbound email (dry-run by default).
-- **Block 7** — Deploy (Vercel for frontend, Fly.io or Render for backend) + polish.
+- **Block 7** — Deploy (Vercel for frontend, Fly.io or Render for backend) + polish, including the real one-click unsubscribe link the footer points at.
 
 ---
 

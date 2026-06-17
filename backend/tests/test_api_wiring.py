@@ -7,20 +7,32 @@ stream (live and replay), run snapshot, emails listing, and the send stub.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 
 import httpx
 import pytest
 import pytest_asyncio
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
 import events
 import main
 import orchestrator
 import send
-from db import Base
+from db import Base, Email, Run, Target, Unsubscribe
 from tests.test_orchestrator_wiring import TARGETS, _patch_agents
+
+WEBHOOK_SECRET = "whsec_" + base64.b64encode(b"api-test-signing-key").decode()
+
+
+def _signed_headers(body: str) -> dict[str, str]:
+    sig = send.compute_webhook_signature(WEBHOOK_SECRET, "msg_api", "1700000000", body)
+    return {
+        "svix-id": "msg_api",
+        "svix-timestamp": "1700000000",
+        "svix-signature": f"v1,{sig}",
+    }
 
 
 @pytest.fixture()
@@ -182,3 +194,61 @@ async def test_failed_target_reported_in_events_and_snapshot(api_db, client, mon
     snapshot = (await client.get(f"/runs/{run_id}")).json()
     assert snapshot["targets"] == {"pending": 0, "completed": 1, "failed": 1}
     assert snapshot["emails"] == 1
+
+
+# --- webhook endpoint ---------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_webhook_without_secret_configured_is_503(api_db, client, monkeypatch):
+    monkeypatch.delenv("RESEND_WEBHOOK_SECRET", raising=False)
+    resp = await client.post("/webhooks/resend", content="{}", headers={})
+    assert resp.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_webhook_rejects_a_bad_signature(api_db, client, monkeypatch):
+    monkeypatch.setenv("RESEND_WEBHOOK_SECRET", WEBHOOK_SECRET)
+    body = json.dumps({"type": "email.delivered", "data": {"email_id": "x"}})
+    resp = await client.post(
+        "/webhooks/resend",
+        content=body,
+        headers={"svix-id": "m", "svix-timestamp": "1", "svix-signature": "v1,wrong"},
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_webhook_valid_complaint_suppresses_address(api_db, client, monkeypatch):
+    monkeypatch.setenv("RESEND_WEBHOOK_SECRET", WEBHOOK_SECRET)
+    # Seed a run/target/email so the complaint maps to a known provider id.
+    with api_db() as s:
+        run = Run(service_id="svc", target_count=1)
+        s.add(run)
+        s.flush()
+        target = Target(run_id=run.id, demo_id="t", name="Acme", raw_notes="{}")
+        s.add(target)
+        s.flush()
+        email = Email(
+            run_id=run.id,
+            target_id=target.id,
+            subject="s",
+            body="b",
+            provider_message_id="pm-web",
+            recipient_email="angry@example.com",
+        )
+        s.add(email)
+        s.commit()
+
+    body = json.dumps(
+        {"type": "email.complained", "data": {"email_id": "pm-web", "to": ["angry@example.com"]}}
+    )
+    resp = await client.post("/webhooks/resend", content=body, headers=_signed_headers(body))
+    assert resp.status_code == 200
+    assert any("unsubscribed" in a for a in resp.json()["applied"])
+
+    with api_db() as s:
+        row = s.scalars(
+            select(Unsubscribe).where(Unsubscribe.email == "angry@example.com")
+        ).first()
+        assert row is not None and row.source == "complaint"
