@@ -19,7 +19,7 @@ export const DEFAULT_SERVICE_ID = SERVICES[0].id;
  * Public marketing site (the /voice-agents landing page that cold-email
  * recipients click through to). Keep these as the single swap points.
  */
-export const BRAND_NAME = "Ringbridge";
+export const BRAND_NAME = "Oakline";
 
 /**
  * Where every "Book a call" button points. Drop in the real Calendly (or
