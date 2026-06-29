@@ -5,7 +5,7 @@ import { BOOKING_URL, BRAND_NAME } from "@/lib/config";
 export const metadata: Metadata = {
   title: `${BRAND_NAME} — Never miss another customer call`,
   description:
-    "An AI receptionist that answers every call 24/7, books the appointment, and only interrupts you for real emergencies. Stop losing jobs to voicemail.",
+    "An AI receptionist designed to answer your calls around the clock, help callers book appointments, and flag the ones that need you — so fewer jobs slip away to voicemail.",
 };
 
 /**
@@ -167,15 +167,15 @@ export default function VoiceAgentsPage() {
             Every missed call is a customer calling your competitor next.
           </h1>
           <p className="mx-auto mt-6 max-w-xl text-balance text-lg leading-relaxed text-slate-300 sm:text-xl">
-            Our AI receptionist answers every call 24/7, books the appointment,
-            and only interrupts you for real emergencies — so you stop losing
-            jobs to voicemail.
+            An AI receptionist built to answer your calls around the clock, help
+            callers book appointments, and flag the ones that genuinely need you
+            — so fewer jobs slip away to voicemail.
           </p>
           <div className="mt-9 flex flex-col items-center gap-3">
             <BookCta />
             <p className="text-sm text-slate-400">
-              15 minutes. Nothing to install. See exactly how it would answer
-              your phone.
+              A 15-minute call, no commitment. We&rsquo;ll walk you through
+              exactly how it would handle your calls.
             </p>
           </div>
         </div>
@@ -218,8 +218,8 @@ export default function VoiceAgentsPage() {
               An AI receptionist that never goes home
             </h2>
             <p className="mt-4 text-lg text-slate-600">
-              It picks up on the first ring, day or night, and handles the call
-              like your best front-desk person would. Three steps to set up.
+              It&rsquo;s built to pick up day or night and handle calls the way
+              a sharp front-desk person would. Three steps to set up.
             </p>
           </div>
           <ol className="mt-12 grid gap-6 sm:grid-cols-3">
@@ -228,19 +228,19 @@ export default function VoiceAgentsPage() {
                 icon: <PhoneIcon />,
                 step: "1",
                 title: "We learn your business",
-                body: "Your hours, services, prices, and what counts as a real emergency. One short call and it knows your front desk cold.",
+                body: "Your hours, services, prices, and what counts as a real emergency. One short call to set it up around how your front desk already works.",
               },
               {
                 icon: <CalendarIcon />,
                 step: "2",
-                title: "It answers every call",
-                body: "A natural-sounding receptionist picks up 24/7 — after hours, on weekends, and while you're already on the phone — and books straight into your calendar.",
+                title: "It answers your calls",
+                body: "A natural-sounding receptionist designed to pick up around the clock — after hours, on weekends, and while you're already on another call — and walk the caller through booking an appointment.",
               },
               {
                 icon: <ShieldIcon />,
                 step: "3",
                 title: "You get the booking, not the busywork",
-                body: "Genuine emergencies ring through to you. Everything else is answered, booked, and logged so nothing slips.",
+                body: "Calls you mark as urgent can be routed to you or your on-call line; the rest are handled and logged, so they're not left sitting in a voicemail box.",
               },
             ].map((s) => (
               <li
@@ -278,16 +278,16 @@ export default function VoiceAgentsPage() {
           <ul className="mt-12 grid gap-6 sm:grid-cols-3">
             {[
               {
-                title: "No missed calls",
-                body: "Every ring answered — 2am, Sunday, or your busiest hour. The booking lands with you instead of your competitor.",
+                title: "Fewer missed calls",
+                body: "Built to answer around the clock — 2am, Sunday, or your busiest hour — so more calls reach you instead of your competitor.",
               },
               {
                 title: "No extra payroll",
-                body: "A full-time receptionist runs thousands a month. This costs a fraction of that and never calls in sick.",
+                body: `A full-time receptionist can run thousands a month. ${BRAND_NAME} is designed to cost a fraction of that — and it won't call in sick.`,
               },
               {
                 title: "No voicemail dead-ends",
-                body: "Callers reach a real answer and a booked time, not a beep. The moment they're ready to buy, you're there.",
+                body: "Callers get a real answer and a path to booking, not a beep — so when they're ready, there's someone there.",
               },
             ].map((o) => (
               <li key={o.title} className="rounded-2xl bg-slate-50 p-6">
@@ -314,23 +314,23 @@ export default function VoiceAgentsPage() {
             {[
               {
                 q: "Will it sound like a robot?",
-                a: "No. It speaks naturally, knows your business, and most callers won't realize they're not talking to a person. You hear exactly how it sounds and sign off before it ever answers a real call.",
+                a: "It's built to sound natural and conversational — not the flat, robotic phone tree you're picturing. It's set up around your business, and you'll hear exactly how it sounds and sign off before it ever takes a real call.",
               },
               {
                 q: "Is this complicated to set up?",
-                a: "No. We do the setup for you. There's no app to install and nothing changes about how you work — your phone just stops going unanswered.",
+                a: "We handle the setup with you. The goal is to keep it simple — no new app to learn and as little change to your day as possible — so your calls just stop going unanswered.",
               },
               {
                 q: "Will it work with my current phone number?",
-                a: "Yes. It works with the number and provider you already have. Keep the same number on your cards, your van, and your website — nothing to reprint.",
+                a: "It's designed to work alongside the number and provider you already have, so you can keep the number that's on your cards, your van, and your website. We'll confirm the details for your exact setup on the call.",
               },
               {
                 q: "What happens with real emergencies?",
-                a: "You decide what counts as urgent. Genuine emergencies get routed straight to you or your on-call line; routine calls get booked and logged so they're waiting for you.",
+                a: "You decide what counts as urgent. Calls you flag as emergencies can be routed to you or your on-call line, while routine calls are handled and logged — and we set those rules up with you so it matches how you already work.",
               },
               {
                 q: "What does it cost?",
-                a: "Less than the jobs you lose to voicemail in a typical month. We'll give you a straight, no-games number on the call — once we know your business, not before.",
+                a: "Pricing depends on your call volume and what you want it to handle, so we'll give you a straight, no-games number on the call — once we understand your business. The aim is for it to cost less than the work a missed-call habit quietly costs you.",
               },
             ].map((item) => (
               <details
