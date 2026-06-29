@@ -22,10 +22,12 @@ export const DEFAULT_SERVICE_ID = SERVICES[0].id;
 export const BRAND_NAME = "Oakline";
 
 /**
- * Where every "Book a call" button points. Drop in the real Calendly (or
- * similar) URL here when it's ready — nothing else needs to change.
- * Until then this falls back to a pre-filled email so the button still works.
+ * Where every "Book a call" button points. Single swap point for the CTA.
+ *
+ * While this is the placeholder below, every CTA on the landing page renders
+ * in a non-functional "Booking — coming soon" state and links nowhere. To go
+ * live, replace this with a real booking URL (Calendly / Cal.com / etc.) that
+ * starts with "https://" — the CTAs turn into working links automatically.
+ * Keep it https; do not point it at a personal email or phone number.
  */
-export const BOOKING_URL =
-  "mailto:zygimantas.kazlauskas28@gmail.com" +
-  "?subject=Book%20a%2015-minute%20call%20about%20AI%20call%20answering";
+export const BOOKING_URL = "https://REPLACE-WITH-BOOKING-LINK.example";

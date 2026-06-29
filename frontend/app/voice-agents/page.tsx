@@ -18,23 +18,42 @@ export const metadata: Metadata = {
 
 // --- shared pieces -------------------------------------------------------
 
+/**
+ * The CTA only becomes a live link once BOOKING_URL is a real https URL.
+ * Until then (placeholder value) it stays in a "coming soon" state and links
+ * nowhere — so no real or personal address is ever exposed. Flipping it live
+ * is a one-line change to BOOKING_URL in lib/config.ts.
+ */
+const BOOKING_LIVE =
+  BOOKING_URL.startsWith("https://") &&
+  !BOOKING_URL.includes("REPLACE-WITH-BOOKING-LINK");
+
 function BookCta({
   children = "Book a 15-minute call",
-  variant = "solid",
 }: {
   children?: React.ReactNode;
-  variant?: "solid" | "ghost";
 }) {
   const base =
     "inline-flex items-center justify-center gap-2 rounded-lg px-6 py-3.5 " +
     "text-base font-semibold transition focus:outline-none focus-visible:ring-2 " +
-    "focus-visible:ring-offset-2 focus-visible:ring-blue-500";
-  const styles =
-    variant === "solid"
-      ? "bg-blue-600 text-white shadow-sm hover:bg-blue-500 focus-visible:ring-offset-slate-950"
-      : "border border-slate-300 bg-white text-slate-900 hover:bg-slate-50 focus-visible:ring-offset-white";
+    "focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950 focus-visible:ring-blue-500";
+
+  if (!BOOKING_LIVE) {
+    return (
+      <span
+        aria-disabled="true"
+        className={`${base} cursor-not-allowed bg-white/10 text-slate-300 ring-1 ring-inset ring-white/15`}
+      >
+        Booking — coming soon
+      </span>
+    );
+  }
+
   return (
-    <a href={BOOKING_URL} className={`${base} ${styles}`}>
+    <a
+      href={BOOKING_URL}
+      className={`${base} bg-blue-600 text-white shadow-sm hover:bg-blue-500`}
+    >
       {children}
       <ArrowIcon />
     </a>
@@ -114,12 +133,21 @@ export default function VoiceAgentsPage() {
           <span className="text-lg font-bold tracking-tight text-white">
             {BRAND_NAME}
           </span>
-          <a
-            href={BOOKING_URL}
-            className="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/20"
-          >
-            Book a call
-          </a>
+          {BOOKING_LIVE ? (
+            <a
+              href={BOOKING_URL}
+              className="rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white ring-1 ring-inset ring-white/20 transition hover:bg-white/20"
+            >
+              Book a call
+            </a>
+          ) : (
+            <span
+              aria-disabled="true"
+              className="cursor-not-allowed rounded-lg bg-white/5 px-4 py-2 text-sm font-medium text-slate-400 ring-1 ring-inset ring-white/10"
+            >
+              Booking soon
+            </span>
+          )}
         </nav>
       </header>
 
