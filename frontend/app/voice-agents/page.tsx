@@ -60,6 +60,41 @@ function ArrowIcon() {
   );
 }
 
+function PhoneIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+      <path d="m9 16 2 2 4-4" />
+    </svg>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+      <path d="M12 8v4M12 16h.01" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
 // --- page ----------------------------------------------------------------
 
 export default function VoiceAgentsPage() {
@@ -107,6 +142,129 @@ export default function VoiceAgentsPage() {
               your phone.
             </p>
           </div>
+        </div>
+      </section>
+
+      {/* Problem, made concrete */}
+      <section className="bg-white">
+        <div className="mx-auto max-w-3xl px-6 py-20 sm:py-24">
+          <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+            You don&rsquo;t lose customers because you&rsquo;re bad. You lose
+            them because no one picked up.
+          </h2>
+          <div className="mt-8 space-y-5 text-lg leading-relaxed text-slate-600">
+            <p>
+              It&rsquo;s 7pm. Someone with a cracked tooth, a flooded kitchen, a
+              wedding next week calls your number. You&rsquo;re closed. So they
+              scroll down to the next name on Google and call them instead. That
+              job is gone, and you never even knew it rang.
+            </p>
+            <p>
+              It happens during the day too — you&rsquo;re with a patient, under
+              a sink, mid-haircut. The phone rings out. Most people who hit a
+              voicemail just hang up and call the next business on the list.
+              They don&rsquo;t leave a message, and they don&rsquo;t call back.
+            </p>
+            <p className="font-medium text-slate-900">
+              Every one of those calls was a paying customer you&rsquo;d already
+              spent money on marketing to reach. Miss a few a week and it adds
+              up to thousands of dollars walking straight to your competitors.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section className="bg-slate-50">
+        <div className="mx-auto max-w-5xl px-6 py-20 sm:py-24">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+              An AI receptionist that never goes home
+            </h2>
+            <p className="mt-4 text-lg text-slate-600">
+              It picks up on the first ring, day or night, and handles the call
+              like your best front-desk person would. Three steps to set up.
+            </p>
+          </div>
+          <ol className="mt-12 grid gap-6 sm:grid-cols-3">
+            {[
+              {
+                icon: <PhoneIcon />,
+                step: "1",
+                title: "We learn your business",
+                body: "Your hours, services, prices, and what counts as a real emergency. One short call and it knows your front desk cold.",
+              },
+              {
+                icon: <CalendarIcon />,
+                step: "2",
+                title: "It answers every call",
+                body: "A natural-sounding receptionist picks up 24/7 — after hours, on weekends, and while you're already on the phone — and books straight into your calendar.",
+              },
+              {
+                icon: <ShieldIcon />,
+                step: "3",
+                title: "You get the booking, not the busywork",
+                body: "Genuine emergencies ring through to you. Everything else is answered, booked, and logged so nothing slips.",
+              },
+            ].map((s) => (
+              <li
+                key={s.step}
+                className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                  {s.icon}
+                </div>
+                <p className="mt-5 text-sm font-semibold text-blue-600">
+                  Step {s.step}
+                </p>
+                <h3 className="mt-1 text-lg font-bold tracking-tight">
+                  {s.title}
+                </h3>
+                <p className="mt-2 text-slate-600">{s.body}</p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      {/* Why it matters / outcomes */}
+      <section className="bg-white">
+        <div className="mx-auto max-w-4xl px-6 py-20 sm:py-24">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
+              Stop paying to be reached, then missing the call
+            </h2>
+            <p className="mt-4 text-lg text-slate-600">
+              This isn&rsquo;t about answering more calls. It&rsquo;s about
+              keeping the customers you&rsquo;re already winning.
+            </p>
+          </div>
+          <ul className="mt-12 grid gap-6 sm:grid-cols-3">
+            {[
+              {
+                title: "No missed calls",
+                body: "Every ring answered — 2am, Sunday, or your busiest hour. The booking lands with you instead of your competitor.",
+              },
+              {
+                title: "No extra payroll",
+                body: "A full-time receptionist runs thousands a month. This costs a fraction of that and never calls in sick.",
+              },
+              {
+                title: "No voicemail dead-ends",
+                body: "Callers reach a real answer and a booked time, not a beep. The moment they're ready to buy, you're there.",
+              },
+            ].map((o) => (
+              <li key={o.title} className="rounded-2xl bg-slate-50 p-6">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                  <CheckIcon />
+                </div>
+                <h3 className="mt-4 text-lg font-bold tracking-tight">
+                  {o.title}
+                </h3>
+                <p className="mt-2 text-slate-600">{o.body}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
