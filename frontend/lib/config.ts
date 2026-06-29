@@ -14,3 +14,18 @@ export const SERVICES = [
 ] as const;
 
 export const DEFAULT_SERVICE_ID = SERVICES[0].id;
+
+/**
+ * Public marketing site (the /voice-agents landing page that cold-email
+ * recipients click through to). Keep these as the single swap points.
+ */
+export const BRAND_NAME = "Ringbridge";
+
+/**
+ * Where every "Book a call" button points. Drop in the real Calendly (or
+ * similar) URL here when it's ready — nothing else needs to change.
+ * Until then this falls back to a pre-filled email so the button still works.
+ */
+export const BOOKING_URL =
+  "mailto:zygimantas.kazlauskas28@gmail.com" +
+  "?subject=Book%20a%2015-minute%20call%20about%20AI%20call%20answering";
