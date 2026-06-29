@@ -95,6 +95,14 @@ function CheckIcon() {
   );
 }
 
+function PlusIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
+
 // --- page ----------------------------------------------------------------
 
 export default function VoiceAgentsPage() {
@@ -265,6 +273,52 @@ export default function VoiceAgentsPage() {
               </li>
             ))}
           </ul>
+        </div>
+      </section>
+
+      {/* Objection handling / FAQ */}
+      <section className="bg-slate-50">
+        <div className="mx-auto max-w-2xl px-6 py-20 sm:py-24">
+          <h2 className="text-balance text-center text-3xl font-bold tracking-tight sm:text-4xl">
+            The questions everyone asks
+          </h2>
+          <div className="mt-10 space-y-3">
+            {[
+              {
+                q: "Will it sound like a robot?",
+                a: "No. It speaks naturally, knows your business, and most callers won't realize they're not talking to a person. You hear exactly how it sounds and sign off before it ever answers a real call.",
+              },
+              {
+                q: "Is this complicated to set up?",
+                a: "No. We do the setup for you. There's no app to install and nothing changes about how you work — your phone just stops going unanswered.",
+              },
+              {
+                q: "Will it work with my current phone number?",
+                a: "Yes. It works with the number and provider you already have. Keep the same number on your cards, your van, and your website — nothing to reprint.",
+              },
+              {
+                q: "What happens with real emergencies?",
+                a: "You decide what counts as urgent. Genuine emergencies get routed straight to you or your on-call line; routine calls get booked and logged so they're waiting for you.",
+              },
+              {
+                q: "What does it cost?",
+                a: "Less than the jobs you lose to voicemail in a typical month. We'll give you a straight, no-games number on the call — once we know your business, not before.",
+              },
+            ].map((item) => (
+              <details
+                key={item.q}
+                className="group rounded-xl border border-slate-200 bg-white px-5 [&_summary]:cursor-pointer"
+              >
+                <summary className="flex items-center justify-between gap-4 py-4 text-lg font-semibold marker:content-none">
+                  {item.q}
+                  <span className="text-slate-400 transition group-open:rotate-45">
+                    <PlusIcon />
+                  </span>
+                </summary>
+                <p className="pb-5 text-slate-600">{item.a}</p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 
