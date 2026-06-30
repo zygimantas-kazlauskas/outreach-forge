@@ -24,6 +24,14 @@ env/
 .env.local
 .env.*.local
 
+# Sourcing pipeline is maintained in a SEPARATE PRIVATE repo
+# (outreach-forge-sourcing). These paths stay on disk so imports resolve, but
+# the PUBLIC repo must never track them.
+backend/sourcing/
+backend/sourced/
+backend/tests/test_sourcing_*.py
+docs/sourcing.md
+
 # Logs
 *.log
 npm-debug.log*
